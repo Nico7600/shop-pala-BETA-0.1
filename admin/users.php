@@ -134,10 +134,14 @@ try {
     $stats['vendeur_test'] = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'vendeur_test'")->fetchColumn();
     $stats['clients'] = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'client'")->fetchColumn();
     $stats['banned'] = $pdo->query("SELECT COUNT(*) FROM users WHERE is_banned = 1")->fetchColumn();
+    $stats['partenaires'] = $pdo->query("SELECT COUNT(*) FROM users WHERE role = 'partenaire'")->fetchColumn();
 } catch (PDOException $e) {
     error_log("Erreur statistiques utilisateurs : " . $e->getMessage());
     $error = "Erreur de connexion : " . $e->getMessage();
-    $stats = ['total' => 0, 'fondateurs' => 0, 'resp_vendeur' => 0, 'vendeur_senior' => 0, 'vendeur_confirme' => 0, 'vendeur_test' => 0, 'clients' => 0, 'banned' => 0, 'abonnes' => 0];
+    $stats = [
+        'total' => 0, 'fondateurs' => 0, 'resp_vendeur' => 0, 'vendeur_senior' => 0, 'vendeur_confirme' => 0,
+        'vendeur_test' => 0, 'clients' => 0, 'banned' => 0, 'abonnes' => 0, 'partenaires' => 0
+    ];
 }
 
 // Filtres
@@ -229,17 +233,13 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestion des Utilisateurs - Admin</title>
+    <title>Admin Panel - CrazySouls Shop</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body class="bg-gray-900 text-gray-100">
-
     <div class="flex flex-col md:flex-row min-h-screen">
-        <!-- Sidebar -->
         <?php include 'sidebar.php'; ?>
-
-        <!-- Contenu principal -->
         <main class="flex-1 p-2 sm:p-8 w-full">
             <div class="container mx-auto">
                 <!-- En-tête -->
@@ -264,7 +264,7 @@ try {
                 <?php endif; ?>
 
                 <!-- Statistiques -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-2 sm:gap-4 mb-4 sm:mb-8">
+                <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-10 gap-2 sm:gap-4 mb-4 sm:mb-8">
                     <div class="bg-gray-800 rounded-xl p-4 border-2 border-purple-500/30 hover:border-purple-500/50 transition-all">
                         <div class="text-center">
                             <i class="fas fa-users text-3xl text-purple-500 mb-2"></i>
@@ -314,6 +314,13 @@ try {
                             <p class="text-2xl font-bold text-indigo-400"><?php echo $stats['abonnes']; ?></p>
                         </div>
                     </div>
+                    <div class="bg-gray-800 rounded-xl p-4 border-2 border-cyan-500/30 hover:border-cyan-500/50 transition-all">
+                        <div class="text-center">
+                            <i class="fas fa-handshake text-3xl text-cyan-400 mb-2"></i>
+                            <p class="text-gray-400 text-xs mb-1">Partenaires</p>
+                            <p class="text-2xl font-bold text-cyan-400"><?php echo $stats['partenaires']; ?></p>
+                        </div>
+                    </div>
                     <div class="bg-gray-800 rounded-xl p-4 border-2 border-gray-500/30 hover:border-gray-500/50 transition-all">
                         <div class="text-center">
                             <i class="fas fa-user text-3xl text-gray-500 mb-2"></i>
@@ -352,6 +359,7 @@ try {
                                 <option value="vendeur_senior" <?php echo $role_filter === 'vendeur_senior' ? 'selected' : ''; ?>>🥇 Vendeur Senior</option>
                                 <option value="vendeur_confirme" <?php echo $role_filter === 'vendeur_confirme' ? 'selected' : ''; ?>>✅ Vendeur Confirmé</option>
                                 <option value="vendeur_test" <?php echo $role_filter === 'vendeur_test' ? 'selected' : ''; ?>>🧪 Vendeur Test</option>
+                                <option value="partenaire" <?php echo $role_filter === 'partenaire' ? 'selected' : ''; ?>>🤝 Partenaire</option>
                                 <option value="client" <?php echo $role_filter === 'client' ? 'selected' : ''; ?>>👤 Client</option>
                             </select>
                         </div>
@@ -462,6 +470,10 @@ try {
                                         <?php elseif($user['role'] === 'vendeur_test'): ?>
                                             <span class="inline-flex items-center px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-full text-sm font-bold">
                                                 <i class="fas fa-vial mr-1"></i>Vendeur Test
+                                            </span>
+                                        <?php elseif($user['role'] === 'partenaire'): ?>
+                                            <span class="inline-flex items-center px-3 py-1 bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-full text-sm font-bold">
+                                                <i class="fas fa-handshake mr-1"></i>Partenaire
                                             </span>
                                         <?php else: ?>
                                             <span class="inline-flex items-center px-3 py-1 bg-gray-700 text-gray-300 rounded-full text-sm">
@@ -614,12 +626,14 @@ try {
                             <div class="flex items-center gap-3">
                                 <span class="text-sm text-gray-400 whitespace-nowrap">Page:</span>
                                 <div class="flex-1 relative">
+                                    <!-- Augmenter la largeur du slider -->
                                     <input type="range" 
                                            id="pageSlider" 
                                            min="1" 
                                            max="<?php echo $total_pages; ?>" 
                                            value="<?php echo $page; ?>" 
                                            class="w-full h-6 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                                           style="width: 350px;" <!-- Ajouté pour élargir le slider -->
                                            onchange="goToPage(this.value)"
                                            oninput="updatePageLabel(this.value)">
                                 </div>
@@ -676,6 +690,7 @@ try {
                         <option value="vendeur_senior">🥇 Vendeur Senior - Expérimenté</option>
                         <option value="resp_vendeur">🛡️ Responsable Vendeur - Gestion équipe</option>
                         <option value="fondateur">👑 Fondateur - Tous les droits</option>
+                        <option value="partenaire">🤝 Partenaire - Accès partenaire</option>
                     </select>
                     <p class="text-xs text-gray-500 mt-2">
                         <i class="fas fa-info-circle mr-1"></i>
@@ -799,6 +814,10 @@ try {
         style.textContent = `
             .slider {
                 height: 2.5rem !important;
+                width: 350px !important; /* Ajouté pour élargir le slider */
+                max-width: 100%;
+                display: block;
+                margin: 0 auto;
             }
             .slider::-webkit-slider-thumb {
                 appearance: none;

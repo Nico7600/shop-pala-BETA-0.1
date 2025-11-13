@@ -10,6 +10,7 @@ $roles = [
     'vendeur_confirme' => ['label' => 'VENDEUR CONFIRMÉ', 'color' => 'from-blue-500 to-blue-700', 'bg' => 'bg-blue-500/10', 'icon' => 'fa-check-circle', 'level' => 5, 'border' => 'border-blue-500'],
     'vendeur' => ['label' => 'VENDEUR', 'color' => 'from-indigo-500 to-indigo-700', 'bg' => 'bg-indigo-500/10', 'icon' => 'fa-shopping-bag', 'level' => 6, 'border' => 'border-indigo-500'],
     'vendeur_test' => ['label' => 'VENDEUR TEST', 'color' => 'from-gray-500 to-gray-700', 'bg' => 'bg-gray-500/10', 'icon' => 'fa-flask', 'level' => 7, 'border' => 'border-gray-500'],
+    'partenaire' => ['label' => 'PARTENAIRE', 'color' => 'from-pink-500 to-pink-700', 'bg' => 'bg-pink-500/10', 'icon' => 'fa-handshake', 'level' => 8, 'border' => 'border-pink-500'],
 ];
 
 // Récupérer tous les membres du staff depuis la base de données
@@ -20,7 +21,7 @@ try {
     $staff_query = $pdo->query("
         SELECT id, username, role, created_at, last_activity
         FROM users 
-        WHERE role IN ('fondateur', 'admin', 'resp_vendeur', 'vendeur_senior', 'vendeur_confirme', 'vendeur', 'vendeur_test')
+        WHERE role IN ('fondateur', 'admin', 'resp_vendeur', 'vendeur_senior', 'vendeur_confirme', 'vendeur', 'vendeur_test', 'partenaire')
         ORDER BY 
             CASE role
                 WHEN 'fondateur' THEN 1
@@ -30,6 +31,7 @@ try {
                 WHEN 'vendeur_confirme' THEN 5
                 WHEN 'vendeur' THEN 6
                 WHEN 'vendeur_test' THEN 7
+                WHEN 'partenaire' THEN 8
             END,
             username ASC
     ");
@@ -52,15 +54,19 @@ $role_counts = !empty($staff_members) ? array_count_values(array_column($staff_m
 // Calculer les groupes et le nombre en ligne
 $main_roles = ['fondateur', 'admin', 'resp_vendeur'];
 $seller_roles = ['vendeur_senior', 'vendeur_confirme', 'vendeur', 'vendeur_test'];
+$partner_roles = ['partenaire'];
 
 $main_staff = array_filter($staff_members, fn($m) => in_array($m['role'], $main_roles));
 $seller_staff = array_filter($staff_members, fn($m) => in_array($m['role'], $seller_roles));
+$partner_staff = array_filter($staff_members, fn($m) => in_array($m['role'], $partner_roles));
 
 $main_online = count(array_filter($main_staff, fn($m) => isOnline($m['last_activity'] ?? null)));
 $seller_online = count(array_filter($seller_staff, fn($m) => isOnline($m['last_activity'] ?? null)));
+$partner_online = count(array_filter($partner_staff, fn($m) => isOnline($m['last_activity'] ?? null)));
 
 $main_total = count($main_staff);
 $seller_total = count($seller_staff);
+$partner_total = count($partner_staff);
 
 // Fonction pour vérifier si un utilisateur est en ligne (activité dans les 5 dernières minutes)
 function isOnline($last_activity) {
@@ -68,6 +74,14 @@ function isOnline($last_activity) {
     $last_time = strtotime($last_activity);
     $current_time = time();
     return ($current_time - $last_time) < 300; // 5 minutes = 300 secondes
+}
+
+// Récupérer l'utilisateur connecté
+$current_user = null;
+if (isset($_SESSION['user_id'])) {
+    $stmt = $pdo->prepare("SELECT id, username, role, created_at, last_activity FROM users WHERE id = ?");
+    $stmt->execute([$_SESSION['user_id']]);
+    $current_user = $stmt->fetch(PDO::FETCH_ASSOC);
 }
 ?>
 
@@ -135,6 +149,12 @@ function isOnline($last_activity) {
                     <span class="text-3xl font-black text-green-400"><?php echo $seller_online; ?></span>
                     <span class="text-gray-300 mx-1">/</span>
                     <span class="text-3xl font-black text-blue-400"><?php echo $seller_total; ?></span>
+                </div>
+                <div class="inline-block bg-pink-500/20 backdrop-blur-sm border border-pink-500/30 rounded-xl px-6 py-3">
+                    <span class="text-xl font-bold text-pink-400 mr-2">Partenaires</span>
+                    <span class="text-3xl font-black text-green-400"><?php echo $partner_online; ?></span>
+                    <span class="text-gray-300 mx-1">/</span>
+                    <span class="text-3xl font-black text-pink-400"><?php echo $partner_total; ?></span>
                 </div>
             </div>
         </div>

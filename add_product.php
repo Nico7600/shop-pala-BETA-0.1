@@ -15,6 +15,8 @@ if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ajouter un produit</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Ajout Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
         .image-preview {
             margin-top: 10px;
@@ -97,7 +99,7 @@ if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
             <div class="form-group">
                 <label for="image">Image du produit *</label>
                 <div class="drop-zone" id="dropZone">
-                    <div class="icon">📁</div>
+                    <div class="icon"><i class="fa-solid fa-folder-open"></i></div>
                     <p>Glissez-déposez une image ici</p>
                     <span class="import-btn">ou cliquez pour IMPORTER</span>
                     <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/jpg,image/gif" required style="display: none;">
@@ -168,7 +170,7 @@ if(!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
                 }
                 const icon = dropZone.querySelector('.icon');
                 if(icon) {
-                    icon.textContent = '✅';
+                    icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
                 }
                 const btn = dropZone.querySelector('.import-btn');
                 if(btn) {

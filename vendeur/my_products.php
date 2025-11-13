@@ -133,11 +133,11 @@ try {
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-6">
                     <?php foreach($products as $product): ?>
                     <div class="bg-gray-800 rounded-xl overflow-hidden hover:transform hover:scale-105 transition-all shadow-lg">
-                        <div class="h-32 sm:h-48 bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+                        <div class="flex items-center justify-center" style="height:256px;">
                             <?php if($product['image']): ?>
-                            <img src="../images/<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="w-full h-full object-cover">
+                            <img src="../images/<?php echo htmlspecialchars($product['image']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="object-contain" style="width:256px;height:256px;">
                             <?php else: ?>
-                            <i class="fas fa-box text-3xl sm:text-6xl text-white/50"></i>
+                            <i class="fas fa-box text-6xl text-white/50"></i>
                             <?php endif; ?>
                         </div>
                         <div class="p-2 sm:p-4">

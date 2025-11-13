@@ -13,10 +13,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_announcement'])) 
     $type = $_POST['type'];
     $is_active = isset($_POST['is_active']) ? 1 : 0;
     $show_in_banner = isset($_POST['show_in_banner']) ? 1 : 0;
-    
+    $expires_at = !empty($_POST['expires_at']) ? $_POST['expires_at'] : null;
+
     if(isset($_POST['announcement_id']) && !empty($_POST['announcement_id'])) {
-        $pdo->prepare("UPDATE announcements SET title = ?, content = ?, type = ?, is_active = ?, show_in_banner = ? WHERE id = ?")
-            ->execute([$title, $content, $type, $is_active, $show_in_banner, $_POST['announcement_id']]);
+        $pdo->prepare("UPDATE announcements SET title = ?, content = ?, type = ?, is_active = ?, show_in_banner = ?, expires_at = ? WHERE id = ?")
+            ->execute([$title, $content, $type, $is_active, $show_in_banner, $expires_at, $_POST['announcement_id']]);
         
         // Logger l'action
         $stmt = $pdo->prepare("INSERT INTO activity_logs (user_id, action, details, created_at) VALUES (?, ?, ?, NOW())");
@@ -28,8 +29,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_announcement'])) 
         
         $success = "Annonce mise à jour !";
     } else {
-        $pdo->prepare("INSERT INTO announcements (title, content, type, is_active, show_in_banner, created_by) VALUES (?, ?, ?, ?, ?, ?)")
-            ->execute([$title, $content, $type, $is_active, $show_in_banner, $_SESSION['user_id']]);
+        $pdo->prepare("INSERT INTO announcements (title, content, type, is_active, show_in_banner, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+            ->execute([$title, $content, $type, $is_active, $show_in_banner, $_SESSION['user_id'], $expires_at]);
         
         // Logger l'action
         $stmt = $pdo->prepare("INSERT INTO activity_logs (user_id, action, details, created_at) VALUES (?, ?, ?, NOW())");
@@ -132,10 +133,25 @@ $announcements = $pdo->query("SELECT a.*, u.username as author
                             <p class="text-xs sm:text-sm text-gray-500">
                                 Par <span class="text-purple-400"><?php echo htmlspecialchars($announcement['author']); ?></span> 
                                 le <?php echo date('d/m/Y à H:i', strtotime($announcement['created_at'])); ?>
+                                <?php if (!empty($announcement['expires_at'])): ?>
+                                    <span class="ml-2 text-red-400">Fin : <?php echo date('d/m/Y H:i', strtotime($announcement['expires_at'])); ?></span>
+                                <?php endif; ?>
                             </p>
                         </div>
                         <div class="flex gap-2 mt-2 sm:mt-0">
-                            <button onclick='editAnnouncement(<?php echo json_encode($announcement); ?>)' 
+                            <?php
+                                // Préparer l'objet JS proprement
+                                $js_announcement = [
+                                    'id' => $announcement['id'],
+                                    'title' => htmlspecialchars($announcement['title'], ENT_QUOTES),
+                                    'content' => htmlspecialchars($announcement['content'], ENT_QUOTES),
+                                    'type' => $announcement['type'],
+                                    'is_active' => $announcement['is_active'],
+                                    'show_in_banner' => $announcement['show_in_banner'],
+                                    'expires_at' => $announcement['expires_at']
+                                ];
+                            ?>
+                            <button onclick='editAnnouncement(<?php echo json_encode($js_announcement, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'
                                 class="bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm transition">
                                 <i class="fas fa-edit"></i>
                             </button>
@@ -202,6 +218,12 @@ $announcements = $pdo->query("SELECT a.*, u.username as author
                         </div>
                     </label>
                 </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-300 mb-2">Date de fin (optionnelle)</label>
+                    <input type="datetime-local" name="expires_at" id="expires_at"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none text-sm sm:text-base">
+                </div>
                 
                 <div class="flex flex-col sm:flex-row gap-3">
                     <button type="button" onclick="closeAnnouncementModal()" 
@@ -226,6 +248,7 @@ $announcements = $pdo->query("SELECT a.*, u.username as author
             document.getElementById('type').value = 'info';
             document.getElementById('is_active').checked = true;
             document.getElementById('show_in_banner').checked = true;
+            document.getElementById('expires_at').value = '';
             document.getElementById('announcementModal').classList.remove('hidden');
         }
 
@@ -237,6 +260,7 @@ $announcements = $pdo->query("SELECT a.*, u.username as author
             document.getElementById('type').value = announcement.type;
             document.getElementById('is_active').checked = announcement.is_active == 1;
             document.getElementById('show_in_banner').checked = announcement.show_in_banner == 1;
+            document.getElementById('expires_at').value = announcement.expires_at ? announcement.expires_at.replace(' ', 'T') : '';
             document.getElementById('announcementModal').classList.remove('hidden');
         }
 

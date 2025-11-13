@@ -92,6 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['type_abonnement'])) {
     <div class="container mx-auto px-4 py-10">
         <div class="max-w-7xl mx-auto bg-gray-900/90 rounded-2xl shadow-2xl border-2 border-purple-700 p-10">
             <h2 class="text-5xl font-extrabold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-12 text-center drop-shadow-lg tracking-tight">Abonnements CrazySouls</h2>
+            <p class="text-center text-lg text-purple-300 font-semibold mb-8">
+                Les abonnements sont payables uniquement en <span class="font-bold text-purple-400">jeu</span> sur <span class="font-bold text-pink-400">Paladium Bedrock</span> ou <span class="font-bold text-green-400">Paladium Java</span>.
+            </p>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
                 <!-- Offre Individuelle -->
                 <div class="bg-gray-800/90 rounded-xl shadow-xl border-2 border-purple-500 p-8 flex flex-col items-center hover:scale-105 hover:border-purple-400 transition-transform duration-200">

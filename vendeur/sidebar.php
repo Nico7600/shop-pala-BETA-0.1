@@ -95,10 +95,9 @@ try {
             <i class="fas fa-chart-line w-6 text-cyan-400"></i>
             <span>Statistiques</span>
         </a>
-        <!-- Séparateur visuel -->
-        <hr class="border-t border-gray-700 my-2">
         <?php if(in_array($_SESSION['role'], ['resp_vendeur', 'fondateur'])): ?>
-        <a href="../admin/index.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-purple-600 hover:text-white transition border-t border-gray-700">
+        <hr class="border-t border-gray-700 my-2">
+        <a href="../admin/index.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-purple-600 hover:text-white transition">
             <i class="fas fa-shield-alt w-6 text-purple-400"></i>
             <span>Panel Admin</span>
         </a>

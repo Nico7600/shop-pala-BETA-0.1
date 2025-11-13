@@ -10,12 +10,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $price = (float)$_POST['price'];
         $category = $_POST['category'];
         $platform = $_POST['platform'];
-        // Stock illimité si vide
-        $stock = (isset($_POST['stock']) && $_POST['stock'] !== '') ? (int)$_POST['stock'] : null;
+        // Stock illimité si vide ou 0
+        $stock = (isset($_POST['stock']) && $_POST['stock'] !== '' && (int)$_POST['stock'] > 0) ? (int)$_POST['stock'] : null;
         
         // Gestion de l'upload d'image
         $image_url = 'placeholder.png';
-        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+        if (!empty($_POST['existing_image'])) {
+            $image_url = $_POST['existing_image'];
+        } else if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             $upload_dir = '../images/';
             $allowed_types = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
             $max_size = 5 * 1024 * 1024; // 5 Mo
@@ -231,7 +233,6 @@ try {
                                 <input type="number" name="stock" min="1" value="100" 
                                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:border-green-500 focus:outline-none"
                                        placeholder="100">
-                                <p class="text-xs text-gray-500 mt-1">(Si vide &rarr; pas de limite de stock)</p>
                             </div>
                         </div>
 
@@ -254,10 +255,17 @@ try {
                                 <span class="inline-block mt-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-bold transition-all">
                                     ou cliquez pour IMPORTER
                                 </span>
-                                <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/jpg,image/gif" required style="display: none;">
+                                <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/jpg,image/gif" style="display: none;">
                             </div>
                             <p class="text-xs text-gray-500 mt-2">Formats acceptés : JPG, JPEG, PNG, GIF (max 5 Mo)</p>
                             <div class="image-preview mt-4 text-center" id="imagePreview"></div>
+                            <!-- Choix depuis la base d'images -->
+                            <div class="mt-4 text-center">
+                                <button type="button" id="openImageBase" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-bold text-white transition-all">
+                                    <i class="fas fa-database mr-1"></i>Choisir depuis la base d'images
+                                </button>
+                                <input type="hidden" name="existing_image" id="existingImageInput" value="">
+                            </div>
                         </div>
 
                         <div>
@@ -285,14 +293,24 @@ try {
                         <i class="fas fa-history text-green-500"></i>
                         Mes Produits Récents
                     </h2>
-                    
-                    <div class="space-y-2 sm:space-y-4">
+                    <!-- Barre de recherche -->
+                    <div class="mb-4 flex items-center gap-2">
+                        <input type="text" id="productSearch" placeholder="Rechercher un produit..." class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-green-500 focus:outline-none text-gray-100" />
+                        <span class="text-green-500 text-xl"><i class="fas fa-search"></i></span>
+                    </div>
+                    <div class="space-y-2 sm:space-y-4" id="productsList">
                         <?php foreach($my_products as $product): ?>
-                        <div class="bg-gray-700 rounded-lg p-2 sm:p-4 border-l-4 border-green-500">
+                        <div class="bg-gray-700 rounded-lg p-2 sm:p-4 border-l-4 border-green-500 product-item">
                             <div class="flex flex-col sm:flex-row justify-between items-start mb-1 sm:mb-2 gap-2">
-                                <div>
-                                    <h3 class="text-base sm:text-lg font-bold"><?php echo htmlspecialchars($product['name']); ?></h3>
-                                    <p class="text-xs sm:text-sm text-gray-400"><?php echo htmlspecialchars($product['category_name']); ?> • <?php echo number_format($product['price'], 2); ?>€</p>
+                                <div class="flex items-center gap-3">
+                                    <!-- Aperçu image -->
+                                    <?php if(!empty($product['image'])): ?>
+                                        <img src="../images/<?php echo htmlspecialchars($product['image']); ?>" alt="Aperçu" class="h-12 w-12 object-contain rounded border border-green-500 mr-2" />
+                                    <?php endif; ?>
+                                    <div>
+                                        <h3 class="text-base sm:text-lg font-bold"><?php echo htmlspecialchars($product['name']); ?></h3>
+                                        <p class="text-xs sm:text-sm text-gray-400"><?php echo htmlspecialchars($product['category_name']); ?> • <?php echo number_format($product['price'], 2); ?>€</p>
+                                    </div>
                                 </div>
                                 <span class="px-2 sm:px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold">
                                     <i class="fas fa-box mr-1"></i>
@@ -310,10 +328,53 @@ try {
         </main>
     </div>
 
+    <!-- Popup base d'images -->
+    <div id="imageBaseModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 rounded-xl p-6 max-w-lg w-full relative">
+            <button type="button" id="closeImageBase" class="absolute top-2 right-2 text-gray-400 hover:text-red-400 text-2xl">
+                <i class="fas fa-times"></i>
+            </button>
+            <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i class="fas fa-database text-green-500"></i>
+                Base d'images
+            </h3>
+            <div class="flex items-center gap-2 mb-4">
+                <input type="text" id="imageBaseSearch" placeholder="Rechercher une image..." class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 focus:border-green-500 focus:outline-none text-gray-100" />
+                <span class="text-green-500 text-xl"><i class="fas fa-search"></i></span>
+            </div>
+            <?php
+            $images_dir = '../images/';
+            $images = array_diff(scandir($images_dir), ['.', '..', 'placeholder.png']);
+            $filtered_images = [];
+            foreach($images as $img) {
+                if (preg_match('/\.(jpg|jpeg|png|gif)$/i', $img)) {
+                    $filtered_images[] = $img;
+                }
+            }
+            ?>
+            <?php if(empty($filtered_images)): ?>
+                <div class="text-center text-gray-400 py-8" id="imageBaseList">
+                    <i class="fas fa-image-slash text-4xl mb-2"></i>
+                    <div>Aucune image disponible dans la base.</div>
+                </div>
+            <?php else: ?>
+                <div class="grid grid-cols-3 gap-4 max-h-64 overflow-y-auto" id="imageBaseList">
+                    <?php foreach($filtered_images as $img): ?>
+                    <div class="cursor-pointer group" data-img="<?php echo htmlspecialchars($img); ?>">
+                        <img src="<?php echo $images_dir . htmlspecialchars($img); ?>" alt="<?php echo htmlspecialchars($img); ?>" class="rounded-lg border-2 border-transparent group-hover:border-green-500 transition-all object-contain h-24 w-full mb-2" />
+                        <div class="text-xs text-gray-300 truncate"><?php echo htmlspecialchars($img); ?></div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
     <script>
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('image');
         const imagePreview = document.getElementById('imagePreview');
+        const existingImageInput = document.getElementById('existingImageInput');
         
         // Click sur la zone pour ouvrir le sélecteur
         dropZone.addEventListener('click', (e) => {
@@ -355,6 +416,53 @@ try {
             }
         });
         
+        // Popup base d'images
+        const imageBaseModal = document.getElementById('imageBaseModal');
+        const openImageBaseBtn = document.getElementById('openImageBase');
+        const closeImageBaseBtn = document.getElementById('closeImageBase');
+        const imageBaseList = document.getElementById('imageBaseList');
+        const imageBaseSearch = document.getElementById('imageBaseSearch');
+        
+        openImageBaseBtn.addEventListener('click', () => {
+            imageBaseModal.classList.remove('hidden');
+            imageBaseSearch.value = '';
+            Array.from(imageBaseList.children).forEach(el => el.style.display = '');
+        });
+
+        closeImageBaseBtn.addEventListener('click', () => {
+            imageBaseModal.classList.add('hidden');
+        });
+        
+        // Sélection d'une image dans la base
+        imageBaseList.addEventListener('click', function(e) {
+            let target = e.target;
+            while(target && !target.dataset.img && target !== imageBaseList) {
+                target = target.parentElement;
+            }
+            if(target && target.dataset.img) {
+                const imgName = target.dataset.img;
+                existingImageInput.value = imgName;
+                imagePreview.innerHTML = `<img src="../images/${imgName}" alt="Aperçu" class="rounded-lg border-2 border-green-500 inline-block">`;
+                fileInput.value = '';
+                fileInput.disabled = true;
+                dropZone.classList.add('opacity-50');
+                imageBaseModal.classList.add('hidden');
+            }
+        });
+        
+        // Barre de recherche dans la popup
+        imageBaseSearch.addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            Array.from(imageBaseList.children).forEach(function(item) {
+                const name = item.dataset.img.toLowerCase();
+                if(name.includes(query)) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+        
         function previewImage(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -369,12 +477,25 @@ try {
                     icon.textContent = '✅';
                 }
                 const btn = dropZone.querySelector('span');
+                btn.textContent = 'Cliquez pour changer l\'image';
                 if(btn) {
-                    btn.textContent = 'Cliquez pour changer l\'image';
                 }
             };
             reader.readAsDataURL(file);
         }
+
+        // Barre de recherche pour filtrer les produits récents
+        document.getElementById('productSearch')?.addEventListener('input', function() {
+            const query = this.value.toLowerCase();
+            document.querySelectorAll('.product-item').forEach(function(item) {
+                const name = item.querySelector('h3')?.textContent.toLowerCase() || '';
+                if(name.includes(query)) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
     </script>
 </body>
 </html>

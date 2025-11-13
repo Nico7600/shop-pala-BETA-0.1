@@ -168,7 +168,7 @@ $nb_offres_actives = $stmt_count->fetchColumn();
 
         <!-- Modal ajout échange -->
         <div id="addEchangeModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
-            <div class="bg-gray-900 rounded-2xl shadow-2xl p-8 w-full max-w-md border-2 border-blue-600 relative">
+            <div class="bg-gray-900 rounded-2xl shadow-2xl p-4 md:p-8 w-full max-w-sm md:max-w-md lg:max-w-lg border-2 border-blue-600 relative overflow-y-auto max-h-[90vh]">
                 <button onclick="document.getElementById('addEchangeModal').classList.add('hidden')" class="absolute top-4 right-4 text-gray-400 hover:text-white text-xl">
                     <i class="fas fa-times"></i>
                 </button>

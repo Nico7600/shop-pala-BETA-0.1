@@ -56,6 +56,10 @@
             <i class="fas fa-envelope w-6 text-fuchsia-400"></i>
             <span>Message privé</span>
         </a>
+        <a href="admin_images.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-purple-700 hover:text-white transition <?php echo basename($_SERVER['PHP_SELF']) == 'admin_images.php' ? 'bg-purple-700 text-white border-l-4 border-purple-400' : ''; ?>">
+            <i class="fas fa-upload w-6 text-purple-400"></i>
+            <span>Add image</span>
+        </a>
         <!-- Séparateur visuel unique -->
         <hr class="border-t border-gray-700 my-2">
         <a href="../vendeur/index.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-teal-600 hover:text-white transition">
