@@ -90,7 +90,11 @@ try {
     // Récupérer les actions uniques pour le filtre
     $stmt = $pdo->query("SELECT DISTINCT action FROM activity_logs ORDER BY action");
     $actions = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    
+
+    // Récupérer la liste des utilisateurs pour le filtre
+    $stmt = $pdo->query("SELECT DISTINCT u.username FROM users u INNER JOIN activity_logs al ON al.user_id = u.id ORDER BY u.username");
+    $usernames = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
     // Statistiques supplémentaires
     $stats_today = $pdo->query("SELECT COUNT(*) FROM activity_logs WHERE DATE(created_at) = CURDATE()")->fetchColumn();
     $stats_week = $pdo->query("SELECT COUNT(*) FROM activity_logs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)")->fetchColumn();
@@ -185,7 +189,14 @@ function formatAction($action) {
                             <label class="block font-bold mb-2">
                                 <i class="fas fa-user mr-2 text-blue-400"></i>Utilisateur
                             </label>
-                            <input type="text" name="user" value="<?php echo htmlspecialchars($filter_user); ?>" placeholder="Nom d'utilisateur..." class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 sm:px-4 py-1 sm:py-2 focus:outline-none focus:border-blue-500">
+                            <select name="user" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 sm:px-4 py-1 sm:py-2 focus:outline-none focus:border-blue-500">
+                                <option value="">Tous les utilisateurs</option>
+                                <?php foreach($usernames as $username): ?>
+                                <option value="<?php echo htmlspecialchars($username); ?>" <?php echo $filter_user === $username ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($username); ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
                         </div>
                         <div>
                             <label class="block font-bold mb-2">

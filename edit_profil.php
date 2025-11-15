@@ -22,8 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $notif = "Email invalide.";
     } else {
-        $update = $pdo->prepare('UPDATE users SET username = ?, email = ? WHERE id = ?');
-        if ($update->execute([$username, $email, $user_id])) {
+        $update = $pdo->prepare('UPDATE users SET username = ?, email = ?, minecraft_username = ? WHERE id = ?');
+        if ($update->execute([$username, $email, $minecraft_username, $user_id])) {
             $_SESSION['notif'] = "Profil mis à jour avec succès.";
             header('Location: profil.php');
             exit;

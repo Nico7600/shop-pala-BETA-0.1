@@ -253,6 +253,9 @@ $final_total = $total - $total_discount;
                             <input type="hidden" name="permission_discount" value="<?php echo $permission_discount; ?>">
                             <input type="hidden" name="total_discount" value="<?php echo $total_discount; ?>">
                             <input type="hidden" name="final_total" value="<?php echo $final_total; ?>">
+                            <?php foreach($cart_items as $item): ?>
+                                <input type="hidden" name="item_names[]" value="<?php echo htmlspecialchars($item['product']['name']); ?>">
+                            <?php endforeach; ?>
                             <button type="submit" class="w-full bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-bold py-4 px-6 rounded-lg transition-all transform hover:scale-105 shadow-lg">
                                 <i class="fas fa-check-circle mr-2"></i>
                                 Passer la commande

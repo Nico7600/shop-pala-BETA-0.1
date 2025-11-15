@@ -6,14 +6,10 @@ require_once 'check_seller.php';
 try {
     $stmt = $pdo->prepare("
         SELECT o.*, u.username, u.minecraft_username,
-               s.username as seller_name,
-               GROUP_CONCAT(CONCAT(oi.quantity, 'x ', oi.product_name) SEPARATOR ', ') as items,
-               COALESCE(SUM(oi.price * oi.quantity), 0) as total_price
+               s.username as seller_name
         FROM orders o
         JOIN users u ON o.user_id = u.id
         LEFT JOIN users s ON o.seller_id = s.id
-        LEFT JOIN order_items oi ON o.id = oi.order_id
-        GROUP BY o.id
         ORDER BY o.created_at DESC
     ");
     $stmt->execute();
@@ -236,7 +232,8 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">ID</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">Client</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">Pseudo MC</th>
-                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left hidden sm:table-cell">Articles</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">Article</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">Quantité</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-center">Montant</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-center hidden sm:table-cell">Vendeur</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-center">Statut</th>
@@ -254,8 +251,16 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
                                             <?php echo htmlspecialchars($order['minecraft_username'] ?? 'N/A'); ?>
                                         </code>
                                     </td>
-                                    <td class="px-2 sm:px-4 py-2 sm:py-3 text-sm text-gray-400 hidden sm:table-cell">
-                                        <?php echo htmlspecialchars($order['items']); ?>
+                                    <td class="px-2 sm:px-4 py-2 sm:py-3">
+                                        <span class="inline-block px-2 sm:px-3 py-1 rounded-full text-xs font-bold border bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+                                            <?php echo htmlspecialchars($order['item_name'] ?? ''); ?>
+                                        </span>
+                                    </td>
+                                    <td class="px-2 sm:px-4 py-2 sm:py-3">
+                                        <span class="inline-block px-2 sm:px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/20 text-blue-400 border-blue-500/30">
+                                            <!-- Si tu veux gérer la quantité, il faut ajouter une colonne 'quantity' dans la table orders -->
+                                            1
+                                        </span>
                                     </td>
                                     <td class="px-2 sm:px-4 py-2 sm:py-3 text-center font-bold text-green-400">
                                         <?php
@@ -364,7 +369,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
                                 
                                 <?php if(empty($orders)): ?>
                                 <tr>
-                                    <td colspan="9" class="px-2 sm:px-4 py-6 sm:py-8 text-center text-gray-500">
+                                    <td colspan="10" class="px-2 sm:px-4 py-6 sm:py-8 text-center text-gray-500">
                                         <i class="fas fa-inbox text-2xl sm:text-4xl mb-2 opacity-20"></i>
                                         <p class="text-xs sm:text-base">Aucune commande pour le moment</p>
                                     </td>

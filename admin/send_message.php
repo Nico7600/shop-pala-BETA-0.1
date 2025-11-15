@@ -351,7 +351,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?php if ($totalPages > 1): ?>
                 <div class="flex justify-center mt-4 sm:mt-6 gap-2">
                     <?php for ($p = 1; $p <= $totalPages; $p++): ?>
-                        <a href="<?php echo '/send_message.php?page=' . $p; ?>"
+                        <a href="<?php echo htmlspecialchars($_SERVER['PHP_SELF']) . '?page=' . $p; ?>"
                            class="px-3 py-1 rounded border <?php echo $p == $page ? 'bg-blue-700 text-white border-blue-700' : 'bg-gray-900 text-blue-300 border-gray-700 hover:bg-gray-700'; ?> text-xs sm:text-base font-semibold">
                             <?php echo $p; ?>
                         </a>

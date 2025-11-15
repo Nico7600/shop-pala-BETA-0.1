@@ -238,8 +238,11 @@ try {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body class="bg-gray-900 text-gray-100">
-    <div class="flex flex-col md:flex-row min-h-screen">
-        <?php include 'sidebar.php'; ?>
+    <div class="flex min-h-screen">
+        <!-- Sidebar adaptée comme dans produit.php -->
+        <aside class="w-64 bg-gray-800 border-r border-gray-700 hidden md:block">
+            <?php include 'sidebar.php'; ?>
+        </aside>
         <main class="flex-1 p-2 sm:p-8 w-full">
             <div class="container mx-auto">
                 <!-- En-tête -->

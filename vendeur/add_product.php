@@ -13,30 +13,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Stock illimité si vide ou 0
         $stock = (isset($_POST['stock']) && $_POST['stock'] !== '' && (int)$_POST['stock'] > 0) ? (int)$_POST['stock'] : null;
         
-        // Gestion de l'upload d'image
+        // Gestion de l'image : uniquement choix depuis la base
         $image_url = 'placeholder.png';
         if (!empty($_POST['existing_image'])) {
             $image_url = $_POST['existing_image'];
-        } else if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-            $upload_dir = '../images/';
-            $allowed_types = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif'];
-            $max_size = 5 * 1024 * 1024; // 5 Mo
-            
-            if (!in_array($_FILES['image']['type'], $allowed_types)) {
-                throw new Exception("Format d'image non autorisé. Utilisez JPG, PNG ou GIF.");
-            }
-            
-            if ($_FILES['image']['size'] > $max_size) {
-                throw new Exception("L'image est trop volumineuse (max 5 Mo).");
-            }
-            
-            $extension = pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION);
-            $image_url = uniqid('product_') . '.' . $extension;
-            $upload_path = $upload_dir . $image_url;
-            
-            if (!move_uploaded_file($_FILES['image']['tmp_name'], $upload_path)) {
-                throw new Exception("Erreur lors de l'upload de l'image.");
-            }
         }
         
         // Récupérer l'ID de la catégorie depuis son nom
@@ -188,7 +168,7 @@ try {
                         Nouveau Produit
                     </h2>
                     
-                    <form method="POST" enctype="multipart/form-data" class="space-y-4 sm:space-y-6 text-xs sm:text-base">
+                    <form method="POST" class="space-y-4 sm:space-y-6 text-xs sm:text-base">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-6">
                             <div>
                                 <label class="block text-sm font-medium mb-2">
@@ -249,23 +229,16 @@ try {
                             <label class="block text-sm font-medium mb-2">
                                 <i class="fas fa-image mr-1"></i>Image du produit *
                             </label>
-                            <div class="drop-zone bg-gray-700 border-gray-600 rounded-lg p-8 text-center" id="dropZone">
-                                <div class="icon text-5xl mb-3">📁</div>
-                                <p class="text-gray-300 mb-2">Glissez-déposez ici l'image du produit</p>
-                                <span class="inline-block mt-2 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-bold transition-all">
-                                    ou cliquez pour IMPORTER
-                                </span>
-                                <input type="file" id="image" name="image" accept="image/jpeg,image/png,image/jpg,image/gif" style="display: none;">
-                            </div>
-                            <p class="text-xs text-gray-500 mt-2">Formats acceptés : JPG, JPEG, PNG, GIF (max 5 Mo)</p>
+                            <!-- Supprimer la drop-zone et l'input file -->
+                            <!-- Choix depuis la base d'images uniquement -->
                             <div class="image-preview mt-4 text-center" id="imagePreview"></div>
-                            <!-- Choix depuis la base d'images -->
                             <div class="mt-4 text-center">
                                 <button type="button" id="openImageBase" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 rounded-lg font-bold text-white transition-all">
                                     <i class="fas fa-database mr-1"></i>Choisir depuis la base d'images
                                 </button>
                                 <input type="hidden" name="existing_image" id="existingImageInput" value="">
                             </div>
+                            <p class="text-xs text-gray-500 mt-2">Formats acceptés : JPG, JPEG, PNG, GIF (max 5 Mo)</p>
                         </div>
 
                         <div>
@@ -371,51 +344,9 @@ try {
     </div>
 
     <script>
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('image');
         const imagePreview = document.getElementById('imagePreview');
         const existingImageInput = document.getElementById('existingImageInput');
-        
-        // Click sur la zone pour ouvrir le sélecteur
-        dropZone.addEventListener('click', (e) => {
-            if(e.target !== fileInput) {
-                fileInput.click();
-            }
-        });
-        
-        // Empêcher le comportement par défaut du drag & drop
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            });
-        });
-        
-        // Ajouter une classe lors du survol
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.add('active'));
-        });
-        
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => dropZone.classList.remove('active'));
-        });
-        
-        // Gérer le drop
-        dropZone.addEventListener('drop', (e) => {
-            const files = e.dataTransfer.files;
-            if(files.length) {
-                fileInput.files = files;
-                previewImage(files[0]);
-            }
-        });
-        
-        // Prévisualisation lors de la sélection
-        fileInput.addEventListener('change', (e) => {
-            if(e.target.files.length) {
-                previewImage(e.target.files[0]);
-            }
-        });
-        
+
         // Popup base d'images
         const imageBaseModal = document.getElementById('imageBaseModal');
         const openImageBaseBtn = document.getElementById('openImageBase');
@@ -443,9 +374,6 @@ try {
                 const imgName = target.dataset.img;
                 existingImageInput.value = imgName;
                 imagePreview.innerHTML = `<img src="../images/${imgName}" alt="Aperçu" class="rounded-lg border-2 border-green-500 inline-block">`;
-                fileInput.value = '';
-                fileInput.disabled = true;
-                dropZone.classList.add('opacity-50');
                 imageBaseModal.classList.add('hidden');
             }
         });
@@ -463,27 +391,6 @@ try {
             });
         });
         
-        function previewImage(file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                imagePreview.innerHTML = `<img src="${e.target.result}" alt="Aperçu" class="rounded-lg border-2 border-green-500 inline-block">`;
-                const pTag = dropZone.querySelector('p');
-                if(pTag) {
-                    pTag.textContent = 'Image importée : ' + file.name;
-                    pTag.classList.add('text-green-400');
-                }
-                const icon = dropZone.querySelector('.icon');
-                if(icon) {
-                    icon.textContent = '✅';
-                }
-                const btn = dropZone.querySelector('span');
-                btn.textContent = 'Cliquez pour changer l\'image';
-                if(btn) {
-                }
-            };
-            reader.readAsDataURL(file);
-        }
-
         // Barre de recherche pour filtrer les produits récents
         document.getElementById('productSearch')?.addEventListener('input', function() {
             const query = this.value.toLowerCase();

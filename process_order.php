@@ -38,12 +38,21 @@ try {
     $final_total = $total - $discount_amount;
     $promo_id = isset($_SESSION['promo_id']) ? $_SESSION['promo_id'] : null;
     
-    // Créer la commande
+    // Récupérer les noms des articles
+    $item_names = isset($_POST['item_names']) ? $_POST['item_names'] : [];
+    
+    // Créer la commande (ajout item_name uniquement, sans quantity)
     $stmt = $pdo->prepare("
-        INSERT INTO orders (user_id, total, promo_code_id, discount_amount, status, payment_status, created_at) 
-        VALUES (?, ?, ?, ?, 'pending', 'pending', NOW())
+        INSERT INTO orders (user_id, total, promo_code_id, discount_amount, status, payment_status, created_at, item_name) 
+        VALUES (?, ?, ?, ?, 'pending', 'pending', NOW(), ?)
     ");
-    $stmt->execute([$_SESSION['user_id'], $final_total, $promo_id, $discount_amount]);
+    $stmt->execute([
+        $_SESSION['user_id'],
+        $final_total,
+        $promo_id,
+        $discount_amount,
+        isset($item_names[0]) ? $item_names[0] : ''
+    ]);
     $order_id = $pdo->lastInsertId();
     
     // Insérer les détails de la commande et mettre à jour le stock

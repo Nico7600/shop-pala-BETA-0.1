@@ -1,6 +1,41 @@
 <?php
 require_once 'config.php';
 
+session_start();
+
+// Système de flamme de connexion (streak) pour l'utilisateur connecté (stocké en base)
+if (isset($_SESSION['user_id'])) {
+    $userId = intval($_SESSION['user_id']);
+    $today = date('Y-m-d');
+    // Récupérer la série et la dernière date depuis la base
+    $stmt = $pdo->prepare("SELECT login_streak, last_login_date FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    $userRow = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    $streak = 1;
+    if ($userRow) {
+        $lastLogin = $userRow['last_login_date'];
+        $streak = intval($userRow['login_streak']);
+        if ($lastLogin == $today) {
+            // déjà compté aujourd'hui, rien à faire
+        } elseif ($lastLogin == date('Y-m-d', strtotime('-1 day'))) {
+            $streak++;
+            $update = $pdo->prepare("UPDATE users SET login_streak = ?, last_login_date = ? WHERE id = ?");
+            $update->execute([$streak, $today, $userId]);
+        } else {
+            $streak = 1;
+            $update = $pdo->prepare("UPDATE users SET login_streak = 1, last_login_date = ? WHERE id = ?");
+            $update->execute([$today, $userId]);
+        }
+    } else {
+        // Cas improbable : utilisateur non trouvé
+        $streak = 1;
+    }
+    // Stocker la valeur pour l'affichage
+    $_SESSION['login_streak'] = $streak;
+    $_SESSION['last_login_date'] = $today;
+}
+
 $announcements = [];
 try {
     $announcements = $pdo->query("SELECT * FROM announcements 
@@ -40,14 +75,34 @@ foreach($active_promos as $promo) {
 
 // Récupérer les utilisateurs en ligne (présents depuis moins de 5 minutes)
 $online_users = [];
+$user_badges_map = [];
 try {
     $online_users = $pdo->query(
-        "SELECT username, role, minecraft_username 
+        "SELECT id, username, role, minecraft_username, login_streak, last_login_date 
          FROM users 
          WHERE last_activity >= (NOW() - INTERVAL 5 MINUTE)"
     )->fetchAll();
+
+    // Récupérer les badges pour les utilisateurs en ligne
+    if (!empty($online_users)) {
+        $user_ids = array_column($online_users, 'id');
+        $in = implode(',', array_map('intval', $user_ids));
+        $badges = $pdo->query(
+            "SELECT ub.user_id, b.name, b.image, b.description, ub.date_attrib
+             FROM user_badges ub
+             JOIN badges b ON ub.badge_id = b.id
+             WHERE ub.user_id IN ($in)
+             AND ub.actif = 1
+             ORDER BY ub.date_attrib DESC"
+        )->fetchAll();
+
+        // Regrouper les badges par user_id
+        foreach ($badges as $badge) {
+            $user_badges_map[$badge['user_id']][] = $badge;
+        }
+    }
 } catch(PDOException $e) {
-    echo '<div style="color:red;">Erreur SQL utilisateurs en ligne : ' . htmlspecialchars($e->getMessage()) . '</div>';
+    echo '<div style="color:red;">Erreur SQL utilisateurs/badges : ' . htmlspecialchars($e->getMessage()) . '</div>';
 }
 
 // Mapping des rôles pour l'affichage
@@ -114,6 +169,119 @@ $roles = [
             to {
                 opacity: 0;
             }
+        }
+
+        /* Popup badge */
+        #badge-popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            background-color: rgba(0, 0, 0, 0.6);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #badge-popup.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+        #badge-popup .popup-content {
+            background-color: #1f2937;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            max-width: 20rem;
+            width: 100%;
+            position: relative;
+            border: 2px solid #6b46c1;
+        }
+        #badge-popup .close-popup {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            color: #a0aec0;
+            cursor: pointer;
+            font-size: 1.25rem;
+        }
+        #badge-popup .close-popup:hover {
+            color: #fff;
+        }
+        #badge-popup h3 {
+            color: #6b46c1;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        #badge-popup p {
+            color: #cbd5e0;
+            margin-bottom: 0.5rem;
+        }
+        #badge-popup img {
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Pour éviter le scroll quand la popup est ouverte */
+        body.badge-popup-open {
+            overflow: hidden;
+        }
+
+        /* Popup flamme */
+        #flame-popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            background-color: rgba(0, 0, 0, 0.6);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #flame-popup.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+        #flame-popup .popup-content {
+            background-color: #1f2937;
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            max-width: 32rem; /* élargi la popup */
+            width: 100%;
+            position: relative;
+            border: 2px solid #6b46c1;
+        }
+        #flame-popup .close-popup {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            color: #a0aec0;
+            cursor: pointer;
+            font-size: 1.25rem;
+        }
+        #flame-popup .close-popup:hover {
+            color: #fff;
+        }
+        #flame-popup h3 {
+            color: #6b46c1;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        #flame-popup p {
+            color: #cbd5e0;
+            margin-bottom: 0.5rem;
+        }
+        #flame-popup img {
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
         }
     </style>
 </head>
@@ -298,10 +466,143 @@ $roles = [
                              alt="Tête de <?php echo htmlspecialchars($user['username']); ?>"
                              class="w-16 h-16 object-cover"
                              style="image-rendering: pixelated;">
-                        <span class="font-bold text-white text-lg"><?php echo htmlspecialchars($user['username']); ?></span>
+                        <span class="font-bold text-white text-lg flex items-center gap-2">
+                            <?php echo htmlspecialchars($user['username']); ?>
+                        </span>
                         <span class="px-3 py-1 rounded-full <?php echo $role_info['bg']; ?> <?php echo $gradeTextColor; ?> text-xs font-semibold flex items-center gap-1 border <?php echo $role_info['border']; ?>">
                             <i class="fas <?php echo $role_info['icon']; ?>"></i> <?php echo $role_info['label']; ?>
                         </span>
+                        <?php if (!empty($user_badges_map[$user['id']])): ?>
+                            <div class="flex flex-wrap justify-center gap-1 mt-2">
+                                <?php foreach ($user_badges_map[$user['id']] as $badge): ?>
+                                    <?php if (!empty($badge['image'])): ?>
+                                        <span class="inline-block align-middle badge-clickable"
+                                              data-badge-name="<?php echo htmlspecialchars($badge['name']); ?>"
+                                              data-badge-image="badges/<?php echo htmlspecialchars($badge['image']); ?>"
+                                              data-badge-desc="<?php echo htmlspecialchars($badge['description']); ?>"
+                                              data-badge-date="<?php echo htmlspecialchars(date('d/m/Y H:i', strtotime($badge['date_attrib']))); ?>"
+                                              data-badge-user="<?php echo htmlspecialchars($user['username']); ?>">
+                                            <img src="badges/<?php echo htmlspecialchars($badge['image']); ?>"
+                                                 alt="<?php echo htmlspecialchars($badge['name']); ?>"
+                                                 title="<?php echo htmlspecialchars($badge['name']); ?>"
+                                                 class="w-8 h-8 rounded shadow cursor-pointer"
+                                                 style="display:inline-block;vertical-align:middle;">
+                                        </span>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                        <!-- Flamme de connexion pour tous les utilisateurs en ligne -->
+                        <?php
+                            $streak = intval($user['login_streak']);
+                            if ($streak >= 1) {
+                                // Définition du palier et visuel de la flamme
+                                $flameIcon = 'fa-fire';
+                                $palier = 'Argent';
+                                $palierDesc = 'Argent : 1-40 jours. Bravo pour la régularité !';
+                                $flameColor = 'text-gray-300';
+                                $flameBg = 'from-gray-700 to-gray-800';
+                                $flameBorder = 'border-gray-400';
+                                $flameShadow = 'shadow';
+                                $extraStyle = '';
+
+                                // Logique PHP pour le palier
+                                if ($streak >= 1 && $streak <= 7) {
+                                    $flameColor = 'text-gray-400';
+                                    $flameBg = 'from-gray-700 to-gray-800';
+                                    $flameBorder = 'border-gray-400';
+                                    $palier = 'Fer';
+                                    $palierDesc = 'Fer : 1-7 jours. Début de série !';
+                                    $extraStyle = '';
+                                } elseif ($streak >= 8 && $streak <= 20) {
+                                    $flameColor = 'text-orange-700';
+                                    $flameBg = 'from-orange-500 to-orange-700';
+                                    $flameBorder = 'border-orange-700';
+                                    $palier = 'Bronze';
+                                    $palierDesc = 'Bronze : 8-20 jours. Série encourageante !';
+                                    $extraStyle = '';
+                                } elseif ($streak >= 21 && $streak <= 40) {
+                                    $flameColor = 'text-gray-300';
+                                    $flameBg = 'from-gray-400 to-gray-700';
+                                    $flameBorder = 'border-gray-300';
+                                    $palier = 'Argent';
+                                    $palierDesc = 'Argent : 21-40 jours. Bravo pour la régularité !';
+                                    $extraStyle = '';
+                                } elseif ($streak >= 41 && $streak <= 70) {
+                                    $flameColor = 'text-yellow-400';
+                                    $flameBg = 'from-yellow-500 to-yellow-700';
+                                    $flameBorder = 'border-yellow-400';
+                                    $palier = 'Or';
+                                    $palierDesc = 'Or : 41-70 jours. Série impressionnante !';
+                                    $extraStyle = '';
+                                } elseif ($streak >= 71 && $streak <= 120) {
+                                    $flameColor = 'text-blue-400';
+                                    $flameBg = 'from-blue-500 to-blue-700';
+                                    $flameBorder = 'border-blue-400';
+                                    $palier = 'Diamant';
+                                    $palierDesc = 'Diamant : 71-120 jours. Série précieuse !';
+                                    $extraStyle = 'box-shadow: 0 0 20px 5px #38bdf8;';
+                                } elseif ($streak >= 121 && $streak <= 200) {
+                                    $flameColor = 'text-pink-400';
+                                    $flameBg = 'from-pink-500 to-pink-700';
+                                    $flameBorder = 'border-pink-400';
+                                    $palier = 'Rubis';
+                                    $palierDesc = 'Rubis : 121-200 jours. Série légendaire !';
+                                    $extraStyle = 'box-shadow: 0 0 20px 5px #ec4899;';
+                                } elseif ($streak >= 201 && $streak <= 300) {
+                                    $flameColor = 'text-green-400';
+                                    $flameBg = 'from-emerald-500 to-green-700';
+                                    $flameBorder = 'border-emerald-400';
+                                    $palier = 'Émeraude';
+                                    $palierDesc = 'Émeraude : 201-300 jours. Série exceptionnelle !';
+                                    $extraStyle = 'box-shadow: 0 0 20px 5px #34d399;';
+                                } elseif ($streak >= 301 && $streak <= 400) {
+                                    $flameColor = 'text-cyan-400';
+                                    $flameBg = 'from-cyan-500 to-blue-700';
+                                    $flameBorder = 'border-cyan-400';
+                                    $palier = 'Saphir';
+                                    $palierDesc = 'Saphir : 301-400 jours. Série prodigieuse !';
+                                    $extraStyle = 'box-shadow: 0 0 24px 8px #22d3ee;';
+                                } elseif ($streak >= 401) {
+                                    $flameColor = 'text-fuchsia-500 animate-flameUltime';
+                                    $flameBg = 'from-fuchsia-500 to-purple-700';
+                                    $flameBorder = 'border-fuchsia-400';
+                                    $palier = 'Mythique';
+                                    $palierDesc = 'Mythique : 401+ jours. Série hors norme !';
+                                    $extraStyle = 'box-shadow: 0 0 28px 10px #a21caf;';
+                                }
+                                $isCurrentUser = (isset($_SESSION['user_id']) && $_SESSION['user_id'] == $user['id']);
+                                $borderClass = $isCurrentUser ? 'border-4 border-orange-400' : 'border-2 ' . $flameBorder;
+                                ?>
+                                <style>
+                                    @keyframes flameUltime {
+                                        0% { filter: drop-shadow(0 0 8px #fbbf24); }
+                                        50% { filter: drop-shadow(0 0 18px #f472b6); }
+                                        100% { filter: drop-shadow(0 0 8px #fbbf24); }
+                                    }
+                                    .animate-flameUltime {
+                                        animation: flameUltime 1.2s infinite;
+                                    }
+                                </style>
+                                <div class="flex flex-col items-center gap-1 mt-2">
+                                    <span class="inline-flex items-center px-3 py-1 rounded-full bg-gradient-to-r <?php echo $flameBg; ?> <?php echo $borderClass; ?> <?php echo $flameShadow; ?> cursor-pointer flame-clickable"
+                                          style="<?php echo $extraStyle ?? ''; ?>; min-width:0;"
+                                          data-flame-palier="<?php echo $palier; ?>"
+                                          data-flame-palierdesc="<?php echo htmlspecialchars($palierDesc); ?>"
+                                          data-flame-streak="<?php echo $streak; ?>"
+                                          data-flame-username="<?php echo htmlspecialchars($user['username']); ?>"
+                                          data-flame-icon="<?php echo $flameIcon; ?>"
+                                          data-flame-flametext="<?php echo 'Série de ' . $streak . ' jours'; ?>"
+                                          >
+                                    <span class="flex items-center gap-1">
+                                        <i class="fas <?php echo $flameIcon; ?> <?php echo $flameColor; ?> text-base"></i>
+                                        <span class="font-bold text-white text-xs"><?php echo 'Série de ' . $streak . 'j'; ?></span>
+                                    </span>
+                                    </span>
+                                </div>
+                                <?php
+                            }
+                        ?>
                     </div>
                 <?php endforeach; ?>
                 <?php if(empty($online_users)): ?>
@@ -507,6 +808,25 @@ $roles = [
         </section>
     </main>
 
+    <!-- Popup badge (structure inspirée de /admin/announcements.php) -->
+    <div id="badge-popup" class="fixed inset-0 flex items-center justify-center z-50 bg-black/60 hidden">
+        <div id="badge-popup-content" class="popup-content relative bg-gray-900 rounded-xl p-6 max-w-sm w-full border-2 border-purple-500 shadow-2xl text-center">
+            <!-- Le contenu du badge sera injecté ici par JS -->
+            <button id="close-badge-popup" type="button" class="absolute top-3 right-3 text-gray-400 hover:text-white text-2xl font-bold transition-colors duration-150" aria-label="Fermer">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Ajoute la popup flamme -->
+    <div id="flame-popup" class="fixed inset-0 flex items-center justify-center z-50 bg-black/60 hidden">
+        <div id="flame-popup-content" class="popup-content relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-xl p-6 max-w-2xl w-full border-4 border-orange-400 shadow-2xl text-center">
+            <button id="close-flame-popup" type="button" class="absolute top-3 right-3 text-gray-400 hover:text-white text-2xl font-bold transition-colors duration-150" aria-label="Fermer">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
     <?php include 'includes/footer.php'; ?>
 
     <script>
@@ -633,7 +953,7 @@ $roles = [
                 }
                 return response.json();
             })
-            .then data => {
+            .then(data => { // <-- Correction ici
                 // Réactiver les boutons
                 buttons.forEach(btn => {
                     btn.disabled = false;
@@ -689,6 +1009,172 @@ $roles = [
                 setTimeout(() => notification.remove(), 300);
             }, 3000);
         }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Badge popup
+            const popup = document.getElementById('badge-popup');
+            const popupContent = document.getElementById('badge-popup-content');
+            document.querySelectorAll('.badge-clickable').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    const name = el.getAttribute('data-badge-name');
+                    const image = el.getAttribute('data-badge-image');
+                    const desc = el.getAttribute('data-badge-desc') || '';
+                    const dateFull = el.getAttribute('data-badge-date') || '';
+                    const user = el.getAttribute('data-badge-user') || '';
+                    const dateShort = dateFull.split(' ')[0];
+
+                    popupContent.innerHTML = `
+                        <button id="close-badge-popup" type="button" class="absolute top-3 right-3 text-gray-400 hover:text-white text-2xl font-bold transition-colors duration-150" aria-label="Fermer">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <div class="flex flex-col items-center gap-3 mt-4">
+                            <img src="${image}" alt="${name}" class="w-24 h-24 rounded object-cover mb-2">
+                            <h3 class="text-2xl font-bold text-purple-400 mb-1 flex items-center justify-center gap-2">
+                                <i class="fas fa-award text-purple-400"></i> ${name}
+                            </h3>
+                            ${desc ? `<p class="text-gray-300 text-base mb-2">${desc}</p>` : ''}
+                            ${dateShort && user ? `<div class="text-xs text-gray-400">Attribué à <span class="font-semibold">${user}</span> le <span class="font-semibold">${dateShort}</span></div>` : ''}
+                        </div>
+                    `;
+                    popup.classList.remove('hidden'); // Correction : retirer hidden AVANT
+                    popup.classList.add('show');
+                    document.body.classList.add('badge-popup-open');
+                    document.getElementById('close-badge-popup').addEventListener('click', function() {
+                        popup.classList.remove('show');
+                        popup.classList.add('hidden');
+                        document.body.classList.remove('badge-popup-open');
+                    });
+                });
+            });
+            popup.addEventListener('click', function(e) {
+                if (e.target === popup) {
+                    popup.classList.remove('show');
+                    popup.classList.add('hidden');
+                    document.body.classList.remove('badge-popup-open');
+                }
+            });
+
+            // Flamme popup
+            const flamePopup = document.getElementById('flame-popup');
+            const flamePopupContent = document.getElementById('flame-popup-content');
+            document.querySelectorAll('.flame-clickable').forEach(function(el) {
+                el.addEventListener('click', function() {
+                    const palier = el.getAttribute('data-flame-palier');
+                    const palierDesc = el.getAttribute('data-flame-palierdesc');
+                    const streak = el.getAttribute('data-flame-streak');
+                    const username = el.getAttribute('data-flame-username');
+                    const flametext = el.getAttribute('data-flame-flametext');
+                    // Couleur selon palier
+                    let flameColor = 'text-gray-300';
+                    let flameBg = 'from-gray-700 to-gray-800';
+                    let border = 'border-gray-400';
+                    if (palier === 'Or') {
+                        flameColor = 'text-yellow-400';
+                        flameBg = 'from-yellow-500 to-yellow-700';
+                        border = 'border-yellow-400';
+                    } else if (palier === 'Diamant') {
+                        flameColor = 'text-blue-400';
+                        flameBg = 'from-blue-500 to-blue-700';
+                        border = 'border-blue-400';
+                    } else if (palier === 'Rubis') {
+                        flameColor = 'text-pink-400';
+                        flameBg = 'from-pink-500 to-pink-700';
+                        border = 'border-pink-400';
+                    } else if (palier === 'Saphir') {
+                        flameColor = 'text-cyan-400';
+                        flameBg = 'from-cyan-500 to-blue-700';
+                        border = 'border-cyan-400';
+                    } else if (palier === 'Mythique') {
+                        flameColor = 'text-fuchsia-500 animate-flameUltime';
+                        flameBg = 'from-fuchsia-500 to-purple-700';
+                        border = 'border-fuchsia-400';
+                    }
+                    flamePopupContent.innerHTML = `
+                        <button id="close-flame-popup" type="button" class="absolute top-3 right-3 text-gray-400 hover:text-white text-2xl font-bold" aria-label="Fermer">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <div class="flex flex-col items-center gap-3 mt-4">
+        <div class="w-20 h-20 rounded-full bg-gradient-to-br ${flameBg} flex items-center justify-center ${border} shadow-lg mb-2">
+            <i class="fas fa-fire ${flameColor} text-5xl"></i>
+        </div>
+        <h3 class="text-xl font-bold text-orange-400 mb-1 flex items-center gap-2">
+            <i class="fas fa-fire text-orange-400"></i> Série de connexion
+        </h3>
+        <div class="px-3 py-1 rounded-full bg-gray-800 text-white text-base font-bold shadow mb-1 border border-orange-400">
+            ${palier} &bull; ${flametext}
+        </div>
+        <p class="text-orange-200 text-base mb-1 font-semibold text-center">${palierDesc}</p>
+        <div class="text-xs text-gray-400 mb-2">Attribué à <span class="font-semibold">${username}</span></div>
+        <div class="mt-2 px-3 py-2 rounded-lg bg-gray-800 border border-purple-500 shadow text-center">
+            <span class="block text-base font-bold text-purple-300 mb-2">Paliers</span>
+            <div class="grid grid-cols-2 gap-2">
+                <span class="inline-flex items-center gap-2 font-semibold text-sm px-2 py-1 rounded bg-gray-800/60 justify-center whitespace-nowrap">
+                    <i class="fas fa-fire text-gray-400"></i>
+                    <span class="text-gray-300">Fer</span>
+                    <span class="text-gray-100">1-7j</span>
+                </span>
+                <span class="inline-flex items-center gap-2 font-semibold text-sm px-2 py-1 rounded bg-orange-900/40 justify-center whitespace-nowrap">
+                    <i class="fas fa-fire text-orange-700"></i>
+                    <span class="text-orange-300">Bronze</span>
+                    <span class="text-orange-100">8-20j</span>
+                </span>
+                <span class="inline-flex items-center gap-2 font-semibold text-sm px-2 py-1 rounded bg-gray-400/40 justify-center whitespace-nowrap">
+                    <i class="fas fa-fire text-gray-300"></i>
+                    <span class="text-gray-200">Argent</span>
+                    <span class="text-gray-100">21-40j</span>
+                </span>
+                <span class="inline-flex items-center gap-2 font-semibold text-sm px-2 py-1 rounded bg-yellow-900/40 justify-center whitespace-nowrap">
+                    <i class="fas fa-fire text-yellow-400"></i>
+                    <span class="text-yellow-300">Or</span>
+                    <span class="text-yellow-100">41-70j</span>
+                </span>
+                <span class="inline-flex items-center gap-2 font-semibold text-sm px-2 py-1 rounded bg-blue-900/40 justify-center whitespace-nowrap">
+                    <i class="fas fa-fire text-blue-400"></i>
+                    <span class="text-blue-300">Diamant</span>
+                    <span class="text-blue-100">71-120j</span>
+                </span>
+                <span class="inline-flex items-center gap-2 font-semibold text-sm px-2 py-1 rounded bg-pink-900/40 justify-center whitespace-nowrap">
+                    <i class="fas fa-fire text-pink-400"></i>
+                    <span class="text-pink-300">Rubis</span>
+                    <span class="text-pink-100">121-200j</span>
+                </span>
+                <span class="inline-flex items-center gap-2 font-semibold text-sm px-2 py-1 rounded bg-green-900/40 justify-center whitespace-nowrap">
+                    <i class="fas fa-fire text-green-400"></i>
+                    <span class="text-green-300">Émeraude</span>
+                    <span class="text-green-100">201-300j</span>
+                </span>
+                <span class="inline-flex items-center gap-2 font-semibold text-sm px-2 py-1 rounded bg-cyan-900/40 justify-center whitespace-nowrap">
+                    <i class="fas fa-fire text-cyan-400"></i>
+                    <span class="text-cyan-300">Saphir</span>
+                    <span class="text-cyan-100">301-400j</span>
+                </span>
+                <span class="inline-flex items-center gap-2 font-semibold text-sm px-2 py-1 rounded bg-fuchsia-900/40 justify-center whitespace-nowrap col-span-2">
+                    <i class="fas fa-fire text-fuchsia-500"></i>
+                    <span class="text-fuchsia-300">Mythique</span>
+                    <span class="text-fuchsia-100">401+j</span>
+                </span>
+            </div>
+        </div>
+    </div>
+`;
+                    flamePopup.classList.remove('hidden'); // Correction : retirer hidden AVANT
+                    flamePopup.classList.add('show');
+                    document.body.classList.add('badge-popup-open');
+                    document.getElementById('close-flame-popup').addEventListener('click', function() {
+                        flamePopup.classList.remove('show');
+                        flamePopup.classList.add('hidden');
+                        document.body.classList.remove('badge-popup-open');
+                    });
+                });
+            });
+            flamePopup.addEventListener('click', function(e) {
+                if (e.target === flamePopup) {
+                    flamePopup.classList.remove('show');
+                    flamePopup.classList.add('hidden');
+                    document.body.classList.remove('badge-popup-open');
+                }
+            });
+        });
     </script>
 </body>
 </html>

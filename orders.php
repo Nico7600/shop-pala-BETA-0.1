@@ -35,12 +35,10 @@ function getStatusColor($status) {
 
 try {
     $stmt = $pdo->prepare("
-        SELECT o.*, COUNT(oi.id) as item_count
-        FROM orders o
-        LEFT JOIN order_items oi ON o.id = oi.order_id
-        WHERE o.user_id = ?
-        GROUP BY o.id
-        ORDER BY o.created_at DESC
+        SELECT *
+        FROM orders
+        WHERE user_id = ?
+        ORDER BY created_at DESC
     ");
     $stmt->execute([$_SESSION['user_id']]);
     $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -100,6 +98,12 @@ try {
                         $discount_amount = $order['discount_amount'] ?? 0;
                         $permission_discount = $order['permission_discount'] ?? 0;
                         $total_reduction = $discount_amount + $permission_discount;
+
+                        // Comptage des articles (séparés par virgule dans item_name)
+                        $item_count = 0;
+                        if (!empty($order['item_name'])) {
+                            $item_count = count(explode(',', $order['item_name']));
+                        }
                     ?>
                     <div class="bg-gradient-to-br from-gray-800 via-gray-900 to-gray-800 rounded-2xl p-6 shadow-lg hover:shadow-2xl transition border-2 <?php echo $borderColor; ?> relative group">
                         <!-- Header statut + date -->
@@ -123,9 +127,15 @@ try {
                                 <div class="flex items-center gap-4 text-gray-400 text-base mb-2">
                                     <span>
                                         <i class="fas fa-box mr-2"></i>
-                                        <?php echo $order['item_count']; ?> article(s)
+                                        <?php echo $item_count; ?> article(s)
                                     </span>
                                 </div>
+                                <?php if (!empty($order['item_name'])): ?>
+                                    <div class="text-gray-400 text-sm mb-2">
+                                        <i class="fas fa-list-ul mr-2"></i>
+                                        <?php echo htmlspecialchars($order['item_name']); ?>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             <div class="flex flex-col items-end gap-2">
                                 <span class="text-2xl font-bold text-green-400 flex items-center gap-2 drop-shadow">

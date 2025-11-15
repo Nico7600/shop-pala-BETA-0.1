@@ -15,6 +15,26 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['role'] = $user['role'];
+
+            // Gestion du login streak
+            $today = date('Y-m-d');
+            $yesterday = date('Y-m-d', strtotime('-1 day'));
+            $last_login = $user['last_login_date'];
+            $login_streak = (int)$user['login_streak'];
+
+            if ($last_login === $today) {
+                // Déjà connecté aujourd'hui, ne rien changer
+            } elseif ($last_login === $yesterday) {
+                // Connexion consécutive, incrémenter le streak
+                $login_streak++;
+            } else {
+                // Nouvelle série
+                $login_streak = 1;
+            }
+
+            // Mettre à jour la date de connexion et le streak
+            $stmt = $pdo->prepare("UPDATE users SET last_login_date = ?, login_streak = ? WHERE id = ?");
+            $stmt->execute([$today, $login_streak, $user['id']]);
             
             // Logger la connexion
             try {

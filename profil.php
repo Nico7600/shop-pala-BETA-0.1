@@ -8,10 +8,51 @@ if (!isset($_SESSION['user_id'])) {
 
 require_once 'config.php';
 
+// Affiche les erreurs PHP (à retirer en prod)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 $user_id = $_SESSION['user_id'];
 $stmt = $pdo->prepare('SELECT * FROM users WHERE id = ?');
 $stmt->execute([$user_id]);
 $user = $stmt->fetch();
+
+// --- Ajout gestion du toggle badge ---
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['badge_id'], $_POST['toggle_actif'])) {
+    $badge_id = intval($_POST['badge_id']);
+    $new_actif = intval($_POST['toggle_actif']);
+
+    if ($new_actif === 1) {
+        // Vérifie le nombre de badges actifs
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM user_badges WHERE user_id = ? AND actif = 1');
+        $stmt->execute([$user_id]);
+        $active_count = $stmt->fetchColumn();
+
+        if ($active_count >= 3) {
+            // Redirige sans activer si déjà 3 badges actifs
+            header("Location: profil.php");
+            exit;
+        }
+    }
+
+    $stmt = $pdo->prepare('UPDATE user_badges SET actif = ? WHERE user_id = ? AND badge_id = ?');
+    $stmt->execute([$new_actif, $user_id, $badge_id]);
+    header("Location: profil.php");
+    exit;
+}
+
+// --- Récupération des badges de l'utilisateur ---
+// Correction du nom de colonne image
+$stmt = $pdo->prepare('
+    SELECT ub.*, b.name, b.image, ub.badge_id AS user_badge_id
+    FROM user_badges ub
+    JOIN badges b ON ub.badge_id = b.id
+    WHERE ub.user_id = ?
+    ORDER BY ub.date_attrib DESC
+');
+$stmt->execute([$user_id]);
+$user_badges = $stmt->fetchAll();
 
 if (!$user) {
     echo "Utilisateur introuvable.";
@@ -74,20 +115,7 @@ if (!$user) {
     <?php include 'includes/header.php'; ?>
 
     <!-- Notification Pop-up -->
-    <?php if (!empty($_SESSION['notif'])): ?>
-        <div class="fixed top-8 left-1/2 -translate-x-1/2 z-50 notif-pop">
-            <div class="flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl bg-gradient-to-r from-gray-700/90 to-gray-900/90 text-white font-semibold border-2 border-gray-600">
-                <div class="w-10 h-10 rounded-full bg-gray-800/80 flex items-center justify-center border-2 border-gray-600">
-                    <i class="fa-solid fa-bell text-xl text-purple-300"></i>
-                </div>
-                <span><?= htmlspecialchars($_SESSION['notif']) ?></span>
-                <button onclick="this.parentElement.parentElement.style.display='none';" class="ml-4 text-white hover:text-purple-200 text-lg focus:outline-none">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-        </div>
-        <?php unset($_SESSION['notif']); ?>
-    <?php endif; ?>
+    <?php /* Bloc notification supprimé */ ?>
 
     <main class="flex-1 flex items-center justify-center">
         <div class="fade-in glow-border w-full max-w-2xl mx-auto bg-gradient-to-br from-gray-800/80 via-gray-900/90 to-gray-900/80 shadow-2xl rounded-2xl p-10 border-2 border-gray-700 backdrop-blur">
@@ -137,8 +165,92 @@ if (!$user) {
                 <i class="fa-solid fa-user-pen"></i> Modifier mon profil
             </a>
         </div>
+
+        <!-- Conteneur Ma Collection (Badges) harmonisé avec Mon Profil -->
+        <div class="fade-in glow-border w-full max-w-2xl mx-auto mt-12 bg-gradient-to-br from-gray-800/80 via-gray-900/90 to-gray-900/80 shadow-2xl rounded-2xl p-10 border-2 border-gray-700 backdrop-blur">
+            <h2 class="text-2xl font-bold text-center mb-8 flex items-center justify-center gap-3">
+                <i class="fa-solid fa-star text-purple-400 text-2xl"></i>
+                Ma Collection
+            </h2>
+            <?php if (count($user_badges) === 0): ?>
+                <div class="text-center text-gray-400">Aucun badge attribué.</div>
+            <?php else: ?>
+                <table class="w-full text-center border border-gray-700 rounded-lg overflow-hidden bg-gray-900/80">
+                    <thead>
+                        <tr>
+                            <th class="py-4 px-6 font-semibold bg-gray-800/60 text-gray-300 w-1/6 text-center">Badge</th>
+                            <th class="py-4 px-6 font-semibold bg-gray-800/60 text-gray-300 text-center">Nom</th>
+                            <th class="py-4 px-6 font-semibold bg-gray-800/60 text-gray-300 text-center">Visibilité</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($user_badges as $badge): ?>
+                            <tr class="border-b border-gray-800 hover:bg-gradient-to-r hover:from-purple-700/20 hover:to-pink-400/10 transition">
+                                <td class="py-4 px-6 flex justify-center items-center">
+                                    <?php if (!empty($badge['image'])): ?>
+                                        <img src="badges/<?= htmlspecialchars($badge['image']) ?>" alt="<?= htmlspecialchars($badge['name']) ?>" class="w-10 h-10 object-contain mx-auto transition-transform duration-300 hover:scale-110">
+                                    <?php else: ?>
+                                        <i class="fa-solid fa-medal text-3xl text-purple-300"></i>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="py-4 px-6 font-semibold text-center"><?= htmlspecialchars($badge['name']) ?></td>
+                                <td class="py-4 px-6 text-center">
+                                    <form method="post" class="inline badge-toggle-form" data-badge-id="<?= $badge['user_badge_id'] ?>">
+                                        <input type="hidden" name="badge_id" value="<?= $badge['user_badge_id'] ?>">
+                                        <input type="hidden" name="toggle_actif" value="<?= $badge['actif'] ? 0 : 1 ?>">
+                                        <button type="submit"
+                                            class="btn-animate px-4 py-2 rounded-lg font-bold transition bg-gradient-to-r <?= $badge['actif'] ? 'from-green-500 to-green-700 hover:from-green-600 hover:to-green-800' : 'from-gray-500 to-gray-700 hover:from-gray-600 hover:to-gray-800' ?> text-white flex items-center gap-2 justify-center badge-toggle-btn"
+                                            data-actif="<?= $badge['actif'] ? 1 : 0 ?>">
+                                            <i class="fa-solid <?= $badge['actif'] ? 'fa-eye' : 'fa-eye-slash' ?>"></i>
+                                            <?= $badge['actif'] ? 'Visible' : 'Masqué' ?>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
     </main>
 
     <?php include 'includes/footer.php'; ?>
 </body>
 </html>
+<script>
+document.querySelectorAll('.badge-toggle-form').forEach(function(form) {
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const badgeId = form.getAttribute('data-badge-id');
+        const btn = form.querySelector('.badge-toggle-btn');
+        const actif = btn.getAttribute('data-actif') === "1" ? 0 : 1;
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ...';
+
+        fetch('profil.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `badge_id=${badgeId}&toggle_actif=${actif}`
+        })
+        .then(() => {
+            // Met à jour le bouton sans recharger
+            btn.setAttribute('data-actif', actif);
+            if (actif === 1) {
+                btn.classList.remove('from-gray-500', 'to-gray-700', 'hover:from-gray-600', 'hover:to-gray-800');
+                btn.classList.add('from-green-500', 'to-green-700', 'hover:from-green-600', 'hover:to-green-800');
+                btn.innerHTML = '<i class="fa-solid fa-eye"></i> Visible';
+            } else {
+                btn.classList.remove('from-green-500', 'to-green-700', 'hover:from-green-600', 'hover:to-green-800');
+                btn.classList.add('from-gray-500', 'to-gray-700', 'hover:from-gray-600', 'hover:to-gray-800');
+                btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Masqué';
+            }
+            btn.disabled = false;
+        })
+        .catch(() => {
+            btn.innerHTML = '<i class="fa-solid fa-exclamation-triangle"></i> Erreur';
+            btn.disabled = false;
+        });
+    });
+});
+</script>

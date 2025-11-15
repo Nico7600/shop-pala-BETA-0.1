@@ -1,11 +1,32 @@
 <?php
-// ...existing code...
+// Connexion à la base de données (à adapter selon votre config)
+require_once '../config.php'; // ou le chemin vers votre fichier de connexion
+
+// Nombre de demandes d'abonnement "En attente de paiement" dans permissions
+$nbDemandesAbos = 0;
+try {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM permissions WHERE statut = 'En attente de paiement'");
+    $stmt->execute();
+    $nbDemandesAbos = $stmt->fetchColumn();
+} catch (Exception $e) {
+    $nbDemandesAbos = 0;
+}
+
+// Nombre de demandes d'échange "attente" dans demandes_echanges
+$nbDemandesEchanges = 0;
+try {
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM demandes_echanges WHERE statut = 'attente'");
+    $stmt->execute();
+    $nbDemandesEchanges = $stmt->fetchColumn();
+} catch (Exception $e) {
+    $nbDemandesEchanges = 0;
+}
 ?>
 <!-- Bouton mobile pour ouvrir la sidebar -->
 <button id="sidebarToggle" class="md:hidden fixed top-4 left-4 z-50 bg-purple-600 text-white p-2 rounded-lg shadow-lg">
     <i class="fas fa-bars"></i>
 </button>
-<aside id="adminSidebar" class="fixed md:static inset-y-0 top-0 left-0 z-40 w-full md:w-64 h-screen bg-gray-800 border-r border-gray-700 flex flex-col overflow-y-auto transition-transform duration-300 -translate-x-full md:translate-x-0">
+<aside id="adminSidebar" class="md:static fixed inset-y-0 top-0 left-0 z-40 w-full md:w-64 bg-gray-800 border-r border-gray-700 flex flex-col overflow-y-auto transition-transform duration-300 -translate-x-full md:translate-x-0 min-h-screen">
     <div class="p-6">
         <h1 class="text-2xl font-bold text-purple-500">
             <i class="fas fa-shield-alt mr-2"></i>Admin Panel
@@ -39,6 +60,9 @@
         <a href="gestion_abos.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-purple-700 hover:text-white transition <?php echo basename($_SERVER['PHP_SELF']) == 'gestion_abos.php' ? 'bg-purple-700 text-white border-l-4 border-purple-400' : ''; ?>">
             <i class="fas fa-id-card w-6 text-purple-400"></i>
             <span>Gestion Abonnements</span>
+            <?php if ($nbDemandesAbos > 0): ?>
+                <span class="ml-2 inline-block bg-red-500 text-white text-xs px-2 py-1 rounded-full align-middle"><?php echo $nbDemandesAbos; ?></span>
+            <?php endif; ?>
         </a>
         <a href="logs.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-cyan-600 hover:text-white transition <?php echo basename($_SERVER['PHP_SELF']) == 'logs.php' ? 'bg-cyan-600 text-white border-l-4 border-cyan-400' : ''; ?>">
             <i class="fas fa-history w-6 text-cyan-400"></i>
@@ -51,6 +75,9 @@
         <a href="echanges.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-blue-600 hover:text-white transition <?php echo basename($_SERVER['PHP_SELF']) == 'echanges.php' ? 'bg-blue-600 text-white border-l-4 border-blue-400' : ''; ?>">
             <i class="fas fa-exchange-alt w-6 text-blue-400"></i>
             <span>Échanges</span>
+            <?php if ($nbDemandesEchanges > 0): ?>
+                <span class="ml-2 inline-block bg-red-500 text-white text-xs px-2 py-1 rounded-full align-middle"><?php echo $nbDemandesEchanges; ?></span>
+            <?php endif; ?>
         </a>
         <a href="send_message.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-fuchsia-600 hover:text-white transition <?php echo basename($_SERVER['PHP_SELF']) == 'send_message.php' ? 'bg-fuchsia-600 text-white border-l-4 border-fuchsia-400' : ''; ?>">
             <i class="fas fa-envelope w-6 text-fuchsia-400"></i>
@@ -59,6 +86,10 @@
         <a href="admin_images.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-purple-700 hover:text-white transition <?php echo basename($_SERVER['PHP_SELF']) == 'admin_images.php' ? 'bg-purple-700 text-white border-l-4 border-purple-400' : ''; ?>">
             <i class="fas fa-upload w-6 text-purple-400"></i>
             <span>Add image</span>
+        </a>
+        <a href="gestion_badges.php" class="flex items-center px-6 py-3 text-gray-300 hover:bg-yellow-700 hover:text-white transition <?php echo basename($_SERVER['PHP_SELF']) == 'gestion_badges.php' ? 'bg-yellow-700 text-white border-l-4 border-yellow-400' : ''; ?>">
+            <i class="fas fa-medal w-6 text-yellow-400"></i>
+            <span>Gestion Badges</span>
         </a>
         <!-- Séparateur visuel unique -->
         <hr class="border-t border-gray-700 my-2">
@@ -126,6 +157,16 @@
         max-height: 100vh;
         top: 0;
         bottom: 0;
+        position: fixed;
+    }
+}
+@media (min-width: 768px) {
+    #adminSidebar {
+        position: static;
+        height: auto;
+        min-height: 0;
+        max-height: none;
+        box-shadow: none;
     }
 }
 </style>
