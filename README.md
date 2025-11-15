@@ -64,21 +64,33 @@ Ce projet vise à fournir une solution e-commerce simple et évolutive. Il perme
 - Passez commande et effectuez le paiement.
 - Consultez l’historique de vos commandes dans votre espace utilisateur.
 
-## Structure du projet
+# Racine du projet
 
-- `/src` : Code source du frontend (React, HTML, CSS, JS, Tailwind)
-  - `/components` : Composants réutilisables
-  - `/pages` : Pages principales (Accueil, Catalogue, Panier, Profil, Admin)
-  - `/redux` : Gestion d’état
-  - `/services` : Appels API
-  - `/styles` : Fichiers CSS/Tailwind
-- `/backend` : Code source du backend (Express, PHP)
-  - `/models` : Modèles de données (produits, utilisateurs, commandes)
-  - `/routes` : Routes API (Node.js ou PHP)
-  - `/controllers` : Logique métier
-  - `/database.sql` : Structure MySQL (optionnel)
-- `/public` : Fichiers statiques (HTML, images, favicon)
-- `/docs` : Documentation technique et fonctionnelle
+- `index.php`, `catalog.php`, `cart.php`, `profil.php`, etc. : Pages principales du site (PHP)
+- `styles.css`, `script.js` : Fichiers CSS et JS globaux
+- `config.php` : Configuration de la base de données
+- `includes/` : Fichiers inclus communs (header, footer, helpers)
+- `images/`, `css/` : Fichiers statiques (images, styles additionnels)
+- `sidebar.php` : Barre latérale principale
+
+## Dossiers fonctionnels
+
+- `admin/` : Panel d’administration (gestion utilisateurs, produits, commandes, logs, badges, patchnotes, etc.)
+- `vendeur/` : Espace vendeur (dashboard, gestion produits, commandes, statistiques)
+- `badges/` : Gestion des badges utilisateurs
+- `api/` : Endpoints API (ex : ajout au panier)
+- `includes/` : Header, footer, helpers, config
+- `css/` : Styles additionnels
+- `images/` : Images du site
+
+## Scripts et outils
+
+- `translate_images.py` : Script Python pour la traduction des images
+
+## Base de données
+
+- La structure MySQL est définie dans le fichier `includes/config.php` et les requêtes SQL présentes dans les différents fichiers PHP.
+
 
 ## Contribution
 
@@ -90,3 +102,4 @@ Les contributions sont encouragées ! Pour proposer une amélioration :
 ## Licence
 
 Ce projet est sous licence MIT.
+
