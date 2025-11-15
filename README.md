@@ -1,4 +1,4 @@
-# Shop
+# Projet Shop Paladium
 
 Shop est une application web complète permettant la gestion d'une boutique en ligne. Elle offre une expérience utilisateur moderne pour la consultation de produits, la gestion du panier, la commande et l'administration.
 
@@ -102,4 +102,5 @@ Les contributions sont encouragées ! Pour proposer une amélioration :
 ## Licence
 
 Ce projet est sous licence MIT.
+
 
