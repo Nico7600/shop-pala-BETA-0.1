@@ -1,11 +1,22 @@
 <?php
 session_start();
 
+// Chargement du .env
+$envPath = dirname(__DIR__) . '/.env';
+if (file_exists($envPath)) {
+    foreach (file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if (strpos(trim($line), '=') !== false) {
+            list($key, $value) = explode('=', $line, 2);
+            putenv(trim($key) . '=' . trim($value));
+        }
+    }
+}
+
 // Configuration de la base de données
-$host = 'localhost';
-$dbname = 'votre_base_de_donnees';
-$username = 'votre_utilisateur';
-$password = 'votre_mot_de_passe';
+$host = getenv('DB_HOST');
+$dbname = getenv('DB_NAME');
+$username = getenv('DB_USER');
+$password = getenv('DB_PASS');
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);

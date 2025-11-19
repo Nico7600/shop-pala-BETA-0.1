@@ -44,12 +44,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_product'])) {
 // Traitement de la modification
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_product'])) {
     try {
-        $stmt = $pdo->prepare("UPDATE items SET name = ?, description = ?, price = ?, stock = ? WHERE id = ? AND seller_id = ?");
+        // On récupère le nom de l'image depuis le champ texte
+        $image_name = $_POST['image_name'];
+
+        $stmt = $pdo->prepare("UPDATE items SET name = ?, description = ?, price = ?, stock = ?, image = ?, category_id = ?, rarity = ?, platform = ? WHERE id = ? AND seller_id = ?");
         $stmt->execute([
             $_POST['name'],
             $_POST['description'],
             $_POST['price'],
             $_POST['stock'],
+            $image_name,
+            $_POST['category_id'],
+            $_POST['rarity'],
+            $_POST['platform'],
             $_POST['product_id'],
             $_SESSION['user_id']
         ]);
@@ -87,6 +94,25 @@ try {
         $error = "Erreur de chargement : " . $e->getMessage();
     }
 }
+
+// Récupérer les catégories pour le select
+try {
+    $cat_stmt = $pdo->query("SELECT id, name FROM categories");
+    $categories = $cat_stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch(PDOException $e) {
+    $categories = [];
+}
+
+// Récupérer la liste des images du dossier /images
+$image_files = [];
+$image_dir = realpath(__DIR__ . '/../images');
+if ($image_dir && is_dir($image_dir)) {
+    foreach (scandir($image_dir) as $file) {
+        if (preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $file)) {
+            $image_files[] = $file;
+        }
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -96,6 +122,85 @@ try {
     <title>Mes Produits - Vendeur</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Pour le popup image */
+        #imagePopup {
+            background: rgba(0,0,0,0.85);
+            z-index: 9999;
+            animation: fadeIn 0.25s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        #imagePopup .popup-container {
+            background: linear-gradient(135deg, #23272f 80%, #1e293b 100%);
+            border-radius: 18px;
+            box-shadow: 0 8px 48px #000a, 0 0 0 4px #3b82f6;
+            border: 3px solid #3b82f6;
+            padding: 32px 24px 24px 24px;
+            max-width: 1200px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+            animation: popupAppear 0.3s;
+        }
+        @keyframes popupAppear {
+            from { transform: scale(0.96); opacity: 0.7; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        #imagePopup .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(256px, 1fr));
+            gap: 24px;
+        }
+        #imagePopup .image-item {
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 16px;
+            transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+            padding: 18px 10px 10px 10px;
+            background: linear-gradient(135deg, #23272f 60%, #334155 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 2px 12px #0004;
+        }
+        #imagePopup .image-item.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px #3b82f6, 0 2px 16px #3b82f6a0;
+            background: linear-gradient(135deg, #1e293b 80%, #334155 100%);
+        }
+        #imagePopup .image-item:hover {
+            border-color: #60a5fa;
+            box-shadow: 0 4px 24px #3b82f6a0;
+            background: linear-gradient(135deg, #283347 80%, #334155 100%);
+        }
+        #imagePopup .image-item img {
+            width: 256px;
+            height: 256px;
+            object-fit: contain;
+            background: linear-gradient(135deg, #181a20 70%, #334155 100%);
+            border-radius: 12px;
+            box-shadow: 0 4px 24px #0006;
+            border: 1.5px solid #334155;
+            transition: transform 0.25s, box-shadow 0.25s;
+            animation: imgAppear 0.5s;
+        }
+        #imagePopup .image-item img:hover {
+            transform: scale(1.08);
+            box-shadow: 0 8px 32px #3b82f6a0;
+            border-color: #3b82f6;
+        }
+        @keyframes imgAppear {
+            from { opacity: 0; transform: scale(0.96);}
+            to { opacity: 1; transform: scale(1);}
+        }
+        #imagePopup .image-item span {
+            cursor: pointer;
+        }
+    </style>
 </head>
 <body class="bg-gray-900 text-gray-100">
 
@@ -130,7 +235,7 @@ try {
                 <?php endif; ?>
 
                 <!-- Liste des produits -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-6 pt-6">
                     <?php foreach($products as $product): ?>
                     <div class="bg-gray-800 rounded-xl overflow-hidden hover:transform hover:scale-105 transition-all shadow-lg">
                         <div class="flex items-center justify-center" style="height:256px;">
@@ -160,7 +265,7 @@ try {
                                 <button onclick="openEditModal(<?php echo htmlspecialchars(json_encode($product)); ?>)" class="flex-1 bg-blue-600 hover:bg-blue-700 px-2 sm:px-3 py-1 sm:py-2 rounded text-center text-xs sm:text-sm font-bold transition-colors">
                                     <i class="fas fa-edit mr-1"></i>Modifier
                                 </button>
-                                <!-- Bouton supprimer retiré -->
+
                             </div>
                         </div>
                     </div>
@@ -214,6 +319,54 @@ try {
                         <input type="number" name="stock" id="edit_stock" required class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 sm:px-4 py-2 sm:py-3 focus:outline-none focus:border-blue-500">
                     </div>
                 </div>
+
+                <div>
+                    <label class="block text-xs sm:text-sm font-bold mb-1 sm:mb-2">Catégorie</label>
+                    <select name="category_id" id="edit_category_id" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 focus:outline-none focus:border-green-500">
+                        <option value="">-- Sélectionner --</option>
+                        <?php foreach($categories as $cat): ?>
+                            <option value="<?php echo $cat['id']; ?>">
+                                <?php echo htmlspecialchars($cat['name']); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs sm:text-sm font-bold mb-1 sm:mb-2">Rareté</label>
+                    <select name="rarity" id="edit_rarity" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 focus:outline-none">
+                        <option value="">-- Sélectionner --</option>
+                        <option value="common">⚪ Commun</option>
+                        <option value="rare">🔵 Rare</option>
+                        <option value="epic">🟣 Épique</option>
+                        <option value="legendary">🟠 Légendaire</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs sm:text-sm font-bold mb-1 sm:mb-2">Plateforme</label>
+                    <select name="platform" id="edit_platform" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 focus:outline-none focus:border-blue-500">
+                        <option value="">-- Sélectionner --</option>
+                        <option value="bedrock">Bedrock</option>
+                        <option value="java">Java</option>
+                    </select>
+                </div>
+
+                <!-- Champ selecteur pour le nom de l'image -->
+                <div>
+                    <label class="block text-xs sm:text-sm font-bold mb-1 sm:mb-2">Image du produit</label>
+                    <div class="flex items-center gap-3 mb-2">
+                        <img id="edit_image_preview" src="" alt="Image actuelle" class="object-contain rounded bg-gray-700" style="width:80px;height:80px;">
+                        <span class="text-gray-400 text-xs">Image actuelle</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="text" name="image_name" id="edit_image_name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 focus:outline-none focus:border-blue-500" readonly>
+                        <button type="button" onclick="openImagePopup()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold flex items-center gap-2">
+                            <i class="fas fa-image"></i> Choisir
+                        </button>
+                        <!-- Suppression de l'affichage du nom de l'image sélectionnée -->
+                        <!-- <span id="edit_image_filename" class="ml-2 text-blue-400 font-mono text-xs"></span> -->
+                    </div>
+                    <span class="text-gray-500 text-xs">Cliquez sur "Choisir" pour sélectionner une image du dossier <b>/images</b>.</span>
+                </div>
                 
                 <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-2 sm:pt-4">
                     <button type="submit" class="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-bold transition-all text-xs sm:text-base">
@@ -227,27 +380,103 @@ try {
         </div>
     </div>
 
+    <!-- Popup de sélection d'image -->
+    <div id="imagePopup" class="hidden fixed inset-0 flex items-center justify-center z-50">
+        <div class="max-w-5xl w-full mx-auto bg-gray-900 rounded-2xl shadow-2xl border-2 border-blue-900 p-8 relative overflow-y-auto" style="max-height:calc(100vh - 40px);padding-top:32px;padding-bottom:32px;">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-extrabold text-blue-300 flex items-center gap-2">
+                    <i class="fa-solid fa-images text-blue-400"></i>
+                    Galerie du shop
+                </h3>
+                <button onclick="closeImagePopup()" class="text-gray-400 hover:text-white text-2xl absolute top-6 right-8">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="max-w-xl mx-auto mb-6 flex items-center gap-3">
+                <div class="relative w-full max-w-xs">
+                    <input type="text" id="popupSearchInput" class="w-full pl-10 pr-4 py-2 rounded-lg border border-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-800 text-gray-100 bg-gray-900" placeholder="Rechercher une image...">
+                    <span class="absolute left-3 top-2.5 text-blue-400">
+                        <i class="fa fa-search"></i>
+                    </span>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-6" id="popupGalleryGrid">
+                <?php foreach($image_files as $img): ?>
+                    <div class="bg-gray-800 rounded-xl shadow-lg hover:shadow-2xl border border-blue-900 p-3 flex flex-col items-center transition-all duration-200 hover:scale-105 group gallery-item" data-name="<?php echo htmlspecialchars($img); ?>" onclick="selectImage('<?php echo htmlspecialchars($img); ?>')">
+                        <img src="../images/<?php echo htmlspecialchars($img); ?>" alt="<?php echo htmlspecialchars($img); ?>" class="w-32 h-32 object-contain mb-2 rounded-lg border-2 border-blue-700 group-hover:border-blue-400 transition-all duration-200 bg-gray-900">
+                        <span class="text-xs text-blue-300 font-semibold break-all text-center"><?php echo htmlspecialchars($img); ?></span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Fonction pour ouvrir le modal d'édition avec les données du produit
         function openEditModal(product) {
             document.getElementById('edit_product_id').value = product.id;
             document.getElementById('edit_name').value = product.name;
             document.getElementById('edit_description').value = product.description;
             document.getElementById('edit_price').value = product.price;
             document.getElementById('edit_stock').value = product.stock;
+            document.getElementById('edit_image_name').value = product.image;
+            // Suppression de l'affichage du nom de l'image sélectionnée
+            // document.getElementById('edit_image_filename').textContent = product.image || '';
+            document.getElementById('edit_image_preview').src = '../images/' + product.image;
+            document.getElementById('edit_category_id').value = product.category_id;
+            document.getElementById('edit_rarity').value = product.rarity;
+            document.getElementById('edit_platform').value = product.platform;
             document.getElementById('editModal').classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
+            document.getElementById('editModal').classList.add('flex');
         }
 
+        // Fonction pour fermer le modal d'édition
         function closeEditModal() {
             document.getElementById('editModal').classList.add('hidden');
-            document.body.style.overflow = 'auto';
+            document.getElementById('editModal').classList.remove('flex');
         }
 
-        // Fermer avec Escape
-        document.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                closeEditModal();
-            }
+        // Fonction pour ouvrir le popup de sélection d'image
+        function openImagePopup() {
+            document.getElementById('imagePopup').classList.remove('hidden');
+            document.getElementById('imagePopup').classList.add('flex');
+        }
+
+        // Fonction pour fermer le popup de sélection d'image
+        function closeImagePopup() {
+            document.getElementById('imagePopup').classList.add('hidden');
+            document.getElementById('imagePopup').classList.remove('flex');
+        }
+
+        // Fonction pour sélectionner une image dans le popup
+        function selectImage(imageName) {
+            document.getElementById('edit_image_name').value = imageName;
+            document.getElementById('edit_image_preview').src = '../images/' + imageName;
+            // Sélection visuelle
+            var items = document.querySelectorAll('#imageGrid .image-item');
+            items.forEach(function(item) {
+                if (item.getAttribute('data-name') === imageName) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+            // Fermer la popup après sélection
+            closeImagePopup();
+        }
+
+        // Filtrer les images dans la popup
+        document.getElementById('popupSearchInput').addEventListener('input', function() {
+            var searchTerm = this.value.toLowerCase();
+            var items = document.querySelectorAll('#popupGalleryGrid .gallery-item');
+            items.forEach(function(item) {
+                var imageName = item.getAttribute('data-name').toLowerCase();
+                if (imageName.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
         });
     </script>
 </body>

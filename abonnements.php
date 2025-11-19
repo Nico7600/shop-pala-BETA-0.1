@@ -207,7 +207,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['type_abonnement'])) {
                 <!-- Grosse Faction -->
                 <div class="bg-gray-800/90 rounded-xl shadow-xl border-2 border-yellow-500 p-8 flex flex-col items-center hover:scale-105 hover:border-yellow-400 transition-transform duration-200">
                     <div class="text-5xl mb-2">
-                        <i class="fas fa-crown text-yellow-400"></i>
+                        <!-- Remplace la couronne par l'image, sans effet de fond -->
+                        <img src="https://skins.nationsglory.fr/face/lait_frais/16" alt="lait_frais" style="width:64px; height:64px;">
                     </div>
                     <h3 class="text-2xl font-bold text-yellow-400 mb-1">Grosse Faction</h3>
                     <div class="text-sm text-yellow-300 font-bold mb-2">26-40 joueurs</div>
@@ -244,6 +245,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['type_abonnement'])) {
         </div>
     </div>
     <?php require_once 'includes/footer.php'; ?>
+
+    <!-- Supprime le popup image -->
+    <!-- <div id="grosse-faction-img-popup" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); z-index:9999;">
+        <img src="https://skins.nationsglory.fr/face/lait_frais/16" alt="lait_frais" style="width:128px; height:128px; border-radius:16px; box-shadow:0 0 32px #fff;">
+    </div> -->
 </body>
 </html>
 <script>

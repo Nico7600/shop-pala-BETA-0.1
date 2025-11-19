@@ -2,7 +2,23 @@
 require_once '../config.php';
 require_once 'check_seller.php';
 
-// Récupérer les statistiques du vendeur
+// Ajout : déterminer l'id du vendeur à afficher
+$target_username = null;
+$target_user_id = $_SESSION['user_id'];
+if (
+    isset($_GET['vendeur']) &&
+    in_array($_SESSION['role'], ['fondateur', 'resp_vendeur', 'admin'])
+) {
+    $target_username = $_GET['vendeur'];
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ?");
+    $stmt->execute([$target_username]);
+    $target_user_id = $stmt->fetchColumn();
+    if (!$target_user_id) {
+        $target_user_id = $_SESSION['user_id'];
+        $target_username = null;
+    }
+}
+
 try {
     $stats = [
         'total_sales' => 0,
@@ -12,29 +28,28 @@ try {
         'total_revenue' => 0
     ];
 
-    // Total des ventes (toutes commandes du vendeur, tous statuts)
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE seller_id = ?");
-    $stmt->execute([$_SESSION['user_id']]);
+    $stmt->execute([$target_user_id]);
     $stats['total_sales'] = $stmt->fetchColumn();
 
     // Commandes en attente (status = 'pending' ou 'processing')
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE seller_id = ? AND status IN ('pending', 'processing')");
-    $stmt->execute([$_SESSION['user_id']]);
+    $stmt->execute([$target_user_id]);
     $stats['pending_orders'] = $stmt->fetchColumn();
 
     // Commandes en cours de livraison (status = 'shipped')
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE seller_id = ? AND status = 'shipped'");
-    $stmt->execute([$_SESSION['user_id']]);
+    $stmt->execute([$target_user_id]);
     $stats['shipping_orders'] = $stmt->fetchColumn();
 
-    // Commandes complétées (status = 'completed' ou 'delivered')
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE seller_id = ? AND status IN ('completed', 'delivered')");
-    $stmt->execute([$_SESSION['user_id']]);
+    // Commandes complétées (status = 'completed', 'delivered' ou 'clos')
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE seller_id = ? AND status IN ('completed', 'delivered', 'clos')");
+    $stmt->execute([$target_user_id]);
     $stats['completed_orders'] = $stmt->fetchColumn();
 
     // Revenu total (toutes commandes du vendeur, tous statuts et paiements)
     $stmt = $pdo->prepare("SELECT COALESCE(SUM(total - discount_amount), 0) FROM orders WHERE seller_id = ?");
-    $stmt->execute([$_SESSION['user_id']]);
+    $stmt->execute([$target_user_id]);
     $stats['total_revenue'] = $stmt->fetchColumn();
 
 } catch(PDOException $e) {
@@ -51,7 +66,7 @@ try {
         ORDER BY o.created_at DESC 
         LIMIT 10
     ");
-    $stmt->execute([$_SESSION['user_id']]);
+    $stmt->execute([$target_user_id]);
     $recent_orders = $stmt->fetchAll();
 } catch(PDOException $e) {
     $recent_orders = [];
@@ -74,18 +89,33 @@ try {
 
         <!-- Contenu principal -->
         <main class="flex-1 p-2 sm:p-8 w-full">
-            <div class="container mx-auto">
+            <div class="container mx-auto relative">
                 <!-- En-tête -->
-                <div class="mb-4 sm:mb-8">
-                    <h1 class="text-2xl sm:text-4xl font-bold mb-2">
-                        <i class="fas fa-tachometer-alt text-green-500 mr-2 sm:mr-3"></i>
-                        Dashboard Vendeur
-                    </h1>
-                    <p class="text-gray-400 text-xs sm:text-base">Bienvenue, <?php echo htmlspecialchars($_SESSION['username']); ?> !</p>
+                <div class="mb-4 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+                    <div>
+                        <h1 class="text-2xl sm:text-4xl font-bold mb-2">
+                            <i class="fas fa-tachometer-alt text-green-500 mr-2 sm:mr-3"></i>
+                            Dashboard Vendeur
+                        </h1>
+                        <p class="text-gray-400 text-xs sm:text-base">
+                            <?php
+                            if ($target_username) {
+                                echo "Vendeur ciblé : <span class='font-bold text-white'>" . htmlspecialchars($target_username) . "</span>";
+                            } else {
+                                echo "Bienvenue, <span class='font-bold text-white'>" . htmlspecialchars($_SESSION['username']) . "</span> !";
+                            }
+                            ?>
+                        </p>
+                    </div>
+                    <?php if(in_array($_SESSION['role'], ['fondateur', 'resp_vendeur', 'admin'])): ?>
+                    <button onclick="openSellerModal()" class="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold px-3 sm:px-4 py-2 sm:py-2 rounded transition flex items-center gap-2 shadow-lg text-xs sm:text-base">
+                        <i class="fas fa-user-search"></i>
+                        Voir les stats d'un vendeur
+                    </button>
+                    <?php endif; ?>
                 </div>
 
-                <!-- Statistiques -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-6 mb-4 sm:mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
                     <div class="bg-gray-800 rounded-xl p-6 border-2 border-blue-500/30 hover:border-blue-500/50 transition-all">
                         <div class="flex items-center justify-between">
                             <div>
@@ -94,30 +124,6 @@ try {
                             </div>
                             <div class="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center">
                                 <i class="fas fa-shopping-bag text-3xl text-blue-500"></i>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-gray-800 rounded-xl p-6 border-2 border-orange-500/30 hover:border-orange-500/50 transition-all">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-400 text-sm mb-1">En Attente</p>
-                                <p class="text-3xl font-bold text-orange-400"><?php echo $stats['pending_orders']; ?></p>
-                            </div>
-                            <div class="w-16 h-16 bg-orange-500/20 rounded-full flex items-center justify-center">
-                                <i class="fas fa-clock text-3xl text-orange-500"></i>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="bg-gray-800 rounded-xl p-6 border-2 border-cyan-500/30 hover:border-cyan-500/50 transition-all">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <p class="text-gray-400 text-sm mb-1">En cours de livraison</p>
-                                <p class="text-3xl font-bold text-cyan-400"><?php echo $stats['shipping_orders']; ?></p>
-                            </div>
-                            <div class="w-16 h-16 bg-cyan-500/20 rounded-full flex items-center justify-center">
-                                <i class="fas fa-truck text-3xl text-cyan-500"></i>
                             </div>
                         </div>
                     </div>
@@ -311,3 +317,65 @@ try {
     </div>
 </body>
 </html>
+
+<!-- Modal JS + HTML (à placer avant </body>) -->
+<?php if(in_array($_SESSION['role'], ['fondateur', 'resp_vendeur', 'admin'])): ?>
+<?php
+// Récupère tous les vendeurs par grade
+$grades = [
+    'vendeur_test' => 'Vendeur Test',
+    'vendeur' => 'Vendeur',
+    'vendeur_confirme' => 'Vendeur Confirmé',
+    'vendeur_senior' => 'Vendeur Sénior',
+    'resp_vendeur' => 'Responsable Vendeur',
+    'fondateur' => 'Fondateur'
+];
+$sellers_by_grade = [];
+foreach($grades as $grade_key => $grade_label) {
+    $stmt = $pdo->prepare("SELECT username FROM users WHERE role = ? ORDER BY username ASC");
+    $stmt->execute([$grade_key]);
+    $sellers_by_grade[$grade_label] = $stmt->fetchAll(PDO::FETCH_COLUMN);
+}
+?>
+<div id="sellerModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 hidden">
+    <div class="bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-lg relative">
+        <button onclick="closeSellerModal()" class="absolute top-2 right-2 text-gray-400 hover:text-white text-xl">
+            <i class="fas fa-times"></i>
+        </button>
+        <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+            <i class="fas fa-user-search text-purple-500"></i>
+            Rechercher un vendeur
+        </h2>
+        <div class="mt-6">
+            <h3 class="text-lg font-bold mb-2 text-purple-400">Accès rapide par grade :</h3>
+            <?php foreach($sellers_by_grade as $grade_label => $sellers): ?>
+                <div class="mb-2">
+                    <?php if($grade_label !== 'Vendeur'): ?>
+                        <div class="text-sm font-semibold text-gray-300 mb-1"><?php echo $grade_label; ?> :</div>
+                    <?php endif; ?>
+                    <?php if($sellers): ?>
+                        <div class="flex flex-wrap gap-2">
+                            <?php foreach($sellers as $seller): ?>
+    <a href="index.php?vendeur=<?php echo urlencode($seller); ?>"
+       class="bg-purple-700 hover:bg-purple-800 text-white px-3 py-1 rounded text-xs font-bold transition">
+        <?php echo htmlspecialchars($seller); ?>
+    </a>
+<?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <span class="text-xs text-gray-500">Aucun</span>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</div>
+<script>
+function openSellerModal() {
+    document.getElementById('sellerModal').style.display = 'flex';
+}
+function closeSellerModal() {
+    document.getElementById('sellerModal').style.display = 'none';
+}
+</script>
+<?php endif; ?>

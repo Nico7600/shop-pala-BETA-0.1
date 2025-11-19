@@ -52,6 +52,7 @@ if (is_dir($images_dir)) {
     $image_files = array_filter(scandir($images_dir), function($file) use ($images_dir) {
         return preg_match('/\.(jpg|jpeg|png|gif|webp)$/i', $file) && is_file($images_dir . $file);
     });
+    sort($image_files, SORT_NATURAL | SORT_FLAG_CASE); // Tri alphabétique
 }
 ?>
 <!DOCTYPE html>

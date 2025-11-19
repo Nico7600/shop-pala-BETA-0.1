@@ -8,7 +8,6 @@ $roles = [
     'resp_vendeur' => ['label' => 'RESPONSABLE VENDEUR', 'color' => 'from-yellow-500 to-yellow-700', 'bg' => 'bg-yellow-500/10', 'icon' => 'fa-user-tie', 'level' => 3, 'border' => 'border-yellow-500'],
     'vendeur_senior' => ['label' => 'VENDEUR SENIOR', 'color' => 'from-green-500 to-green-700', 'bg' => 'bg-green-500/10', 'icon' => 'fa-star', 'level' => 4, 'border' => 'border-green-500'],
     'vendeur_confirme' => ['label' => 'VENDEUR CONFIRMÉ', 'color' => 'from-blue-500 to-blue-700', 'bg' => 'bg-blue-500/10', 'icon' => 'fa-check-circle', 'level' => 5, 'border' => 'border-blue-500'],
-    'vendeur' => ['label' => 'VENDEUR', 'color' => 'from-indigo-500 to-indigo-700', 'bg' => 'bg-indigo-500/10', 'icon' => 'fa-shopping-bag', 'level' => 6, 'border' => 'border-indigo-500'],
     'vendeur_test' => ['label' => 'VENDEUR TEST', 'color' => 'from-gray-500 to-gray-700', 'bg' => 'bg-gray-500/10', 'icon' => 'fa-flask', 'level' => 7, 'border' => 'border-gray-500'],
     'partenaire' => ['label' => 'PARTENAIRE', 'color' => 'from-pink-500 to-pink-700', 'bg' => 'bg-pink-500/10', 'icon' => 'fa-handshake', 'level' => 8, 'border' => 'border-pink-500'],
 ];
@@ -21,7 +20,7 @@ try {
     $staff_query = $pdo->query("
         SELECT id, username, role, created_at, last_activity
         FROM users 
-        WHERE role IN ('fondateur', 'admin', 'resp_vendeur', 'vendeur_senior', 'vendeur_confirme', 'vendeur', 'vendeur_test', 'partenaire')
+        WHERE role IN ('fondateur', 'admin', 'resp_vendeur', 'vendeur_senior', 'vendeur_confirme', 'vendeur_test', 'partenaire')
         ORDER BY 
             CASE role
                 WHEN 'fondateur' THEN 1
@@ -29,9 +28,8 @@ try {
                 WHEN 'resp_vendeur' THEN 3
                 WHEN 'vendeur_senior' THEN 4
                 WHEN 'vendeur_confirme' THEN 5
-                WHEN 'vendeur' THEN 6
-                WHEN 'vendeur_test' THEN 7
-                WHEN 'partenaire' THEN 8
+                WHEN 'vendeur_test' THEN 6
+                WHEN 'partenaire' THEN 7
             END,
             username ASC
     ");
@@ -53,7 +51,7 @@ $role_counts = !empty($staff_members) ? array_count_values(array_column($staff_m
 
 // Calculer les groupes et le nombre en ligne
 $main_roles = ['fondateur', 'admin', 'resp_vendeur'];
-$seller_roles = ['vendeur_senior', 'vendeur_confirme', 'vendeur', 'vendeur_test'];
+$seller_roles = ['vendeur_senior', 'vendeur_confirme', 'vendeur_test'];
 $partner_roles = ['partenaire'];
 
 $main_staff = array_filter($staff_members, fn($m) => in_array($m['role'], $main_roles));

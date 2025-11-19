@@ -25,7 +25,7 @@
                     Filtres de recherche
                 </h2>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5">
                 <div>
                     <label class="block text-sm font-semibold text-gray-300 flex items-center mb-2">
                         <i class="fas fa-folder mr-2 text-purple-400"></i>Catégorie
@@ -71,6 +71,26 @@
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-300 flex items-center mb-2">
+                        <i class="fas fa-user mr-2 text-purple-400"></i>Vendeur
+                    </label>
+                    <select id="sellerFilter" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-white">
+                        <option value="">Tous</option>
+                        <?php
+                        // Récupère les vendeurs avec les rôles techniques
+                        $sellers = $pdo->query("
+                            SELECT id, username 
+                            FROM users 
+                            WHERE role IN ('vendeur_test', 'vendeur_confirme', 'vendeur_senior', 'resp_vendeur', 'fondateur')
+                            ORDER BY username
+                        ")->fetchAll();
+                        foreach($sellers as $seller):
+                        ?>
+                        <option value="<?php echo $seller['id']; ?>"><?php echo htmlspecialchars($seller['username']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-300 flex items-center mb-2">
                         <i class="fas fa-search mr-2 text-blue-400"></i>Recherche rapide
                     </label>
                     <input type="text" id="searchInput" placeholder="Rechercher..."
@@ -86,10 +106,12 @@
         <!-- Grille produits -->
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8" id="itemsGrid">
             <?php
-            $stmt = $pdo->query("SELECT i.*, c.name as category_name FROM items i 
-                                LEFT JOIN categories c ON i.category_id = c.id 
-                                WHERE i.stock IS NULL OR i.stock > 0
-                                ORDER BY i.rarity DESC, i.created_at DESC");
+            $stmt = $pdo->query("SELECT i.*, c.name as category_name, u.username as seller_name
+                                 FROM items i
+                                 LEFT JOIN categories c ON i.category_id = c.id
+                                 LEFT JOIN users u ON i.seller_id = u.id
+                                 WHERE i.stock IS NULL OR i.stock > 0
+                                 ORDER BY i.rarity DESC, i.created_at DESC");
             while($item = $stmt->fetch()):
                 $isUnlimitedStock = is_null($item['stock']) || $item['stock'] === '';
             ?>
@@ -103,6 +125,7 @@
                 data-stock="<?php echo $isUnlimitedStock ? 'unlimited' : $item['stock']; ?>"
                 data-item-image="<?php echo htmlspecialchars($item['image']); ?>"
                 data-item-name="<?php echo htmlspecialchars($item['name']); ?>"
+                data-seller-id="<?php echo $item['seller_id']; ?>"
             >
                 <div class="flex gap-2 mb-2">
                     <?php if($item['price'] < 10): ?>
@@ -124,6 +147,12 @@
                     <?php elseif($item['platform'] === 'java'): ?>
                         <span class="px-2 py-1 bg-orange-600 text-white text-xs rounded flex items-center gap-1">
                             <i class="fas fa-coffee"></i>JAVA
+                        </span>
+                    <?php endif; ?>
+                    <!-- Nom du vendeur à droite pour JAVA et BEDROCK -->
+                    <?php if (($item['platform'] === 'java' || $item['platform'] === 'bedrock') && !empty($item['seller_name'])): ?>
+                        <span class="ml-auto px-2 py-1 bg-purple-600 text-white text-xs rounded flex items-center gap-1">
+                            <i class="fas fa-user"></i><?php echo htmlspecialchars($item['seller_name']); ?>
                         </span>
                     <?php endif; ?>
                 </div>
@@ -158,10 +187,6 @@
                         </span>
                     </div>
                     <div class="flex items-center gap-2 mt-4">
-                        <input type="number" id="quantity-<?php echo $item['id']; ?>" min="1"
-                            max="<?php echo $isUnlimitedStock ? '' : $item['stock']; ?>"
-                            value="1"
-                            class="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white w-16 text-center focus:outline-none">
                         <button onclick="openQuantityModal(<?php echo $item['id']; ?>)"
                             class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg flex items-center gap-2 transition">
                             <i class="fas fa-cart-plus"></i> Ajouter au panier
@@ -336,6 +361,7 @@
             const platform = document.getElementById('platformFilter').value;
             const maxPrice = document.getElementById('priceFilter').value;
             const search = document.getElementById('searchInput').value.toLowerCase();
+            const seller = document.getElementById('sellerFilter').value;
             const items = document.querySelectorAll('.item-card');
             let visibleCount = 0;
             let totalStock = 0;
@@ -346,12 +372,22 @@
                 const itemPlatform = item.dataset.platform;
                 const itemPrice = parseFloat(item.dataset.price);
                 const itemName = item.dataset.name;
+                const itemSellerId = item.dataset.sellerId;
+                const itemSellerName = item.querySelector('.bg-purple-600 .fa-user') 
+                    ? item.querySelector('.bg-purple-600 .fa-user').nextSibling.textContent.trim()
+                    : '';
                 let show = true;
                 if(category && itemCategory !== category) show = false;
                 if(rarity && itemRarity !== rarity) show = false;
                 if(platform && itemPlatform !== platform) show = false;
                 if(maxPrice && itemPrice > parseFloat(maxPrice)) show = false;
                 if(search && !itemName.includes(search)) show = false;
+                if(seller) {
+                    if (
+                        itemSellerId !== seller &&
+                        itemSellerName.toUpperCase() !== seller.toUpperCase()
+                    ) show = false;
+                }
                 item.style.display = show ? 'flex' : 'none';
                 if(show) {
                     visibleCount++;
@@ -374,6 +410,7 @@
             document.getElementById('platformFilter').value = '';
             document.getElementById('priceFilter').value = '';
             document.getElementById('searchInput').value = '';
+            document.getElementById('sellerFilter').value = '';
             filterItems();
         }
         let searchTimeout;
@@ -388,6 +425,7 @@
             clearTimeout(searchTimeout);
             searchTimeout = setTimeout(filterItems, 500);
         });
+        document.getElementById('sellerFilter').addEventListener('change', filterItems);
         window.addEventListener('load', filterItems);
     </script>
 </body>

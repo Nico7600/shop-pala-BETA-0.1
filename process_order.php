@@ -33,49 +33,66 @@ try {
         $total += $item['price'] * $item['quantity'];
     }
     
-    // Appliquer la réduction si un code promo est utilisé
-    $discount_amount = isset($_SESSION['discount_amount']) ? $_SESSION['discount_amount'] : 0;
-    $final_total = $total - $discount_amount;
+    // Récupérer les montants envoyés par le formulaire
+    $discount_amount = isset($_POST['discount_amount']) ? floatval($_POST['discount_amount']) : 0;
+    $permission_discount = isset($_POST['permission_discount']) ? floatval($_POST['permission_discount']) : 0;
+    $final_total = isset($_POST['final_total']) ? floatval($_POST['final_total']) : $total;
     $promo_id = isset($_SESSION['promo_id']) ? $_SESSION['promo_id'] : null;
     
-    // Récupérer les noms des articles
-    $item_names = isset($_POST['item_names']) ? $_POST['item_names'] : [];
-    
-    // Créer la commande (ajout item_name uniquement, sans quantity)
-    $stmt = $pdo->prepare("
-        INSERT INTO orders (user_id, total, promo_code_id, discount_amount, status, payment_status, created_at, item_name) 
-        VALUES (?, ?, ?, ?, 'pending', 'pending', NOW(), ?)
-    ");
-    $stmt->execute([
-        $_SESSION['user_id'],
-        $final_total,
-        $promo_id,
-        $discount_amount,
-        isset($item_names[0]) ? $item_names[0] : ''
-    ]);
-    $order_id = $pdo->lastInsertId();
-    
-    // Insérer les détails de la commande et mettre à jour le stock
+    // Pour chaque article du panier, créer une commande séparée
+    $order_ids = [];
     foreach($cart_items as $item) {
-        // Utiliser product_id au lieu de item_id
+        // Calculer le total pour cet article
+        $item_total = $item['price'] * $item['quantity'];
+        // Calculer la réduction code promo sur la valeur de base
+        $promo_discount = 0;
+        if ($total > 0 && $discount_amount > 0) {
+            $promo_discount = round($discount_amount * ($item_total / $total), 2);
+        }
+        // Calculer la réduction permission sur la valeur de base
+        $permission_discount_item = 0;
+        if ($total > 0 && $permission_discount > 0) {
+            $permission_discount_item = round($permission_discount * ($item_total / $total), 2);
+        }
+        // Additionner les deux réductions
+        $item_discount = $promo_discount + $permission_discount_item;
+        $item_final_total = $item_total - $item_discount;
+
+        // Créer la commande pour cet article
         $stmt = $pdo->prepare("
-            INSERT INTO order_items (order_id, product_id, quantity, price) 
+            INSERT INTO orders (user_id, total, promo_code_id, discount_amount, status, payment_status, created_at, item_name)
+            VALUES (?, ?, ?, ?, 'pending', 'pending', NOW(), ?)
+        ");
+        $stmt->execute([
+            $_SESSION['user_id'],
+            $item_final_total, // prix payé après réduction
+            $promo_id,
+            $item_discount,
+            $item['name']
+        ]);
+        $order_id = $pdo->lastInsertId();
+        $order_ids[] = $order_id;
+    
+        // Insérer le détail de la commande
+        $stmt = $pdo->prepare("
+            INSERT INTO order_items (order_id, product_id, quantity, price)
             VALUES (?, ?, ?, ?)
         ");
         $stmt->execute([$order_id, $item['product_id'], $item['quantity'], $item['price']]);
-        
+    
+        // Mettre à jour le stock
         $stmt = $pdo->prepare("UPDATE items SET stock = stock - ? WHERE id = ?");
         $stmt->execute([$item['quantity'], $item['product_id']]);
-    }
     
-    // Incrémenter current_uses du code promo si utilisé
-    if($promo_id) {
-        $stmt = $pdo->prepare("
-            UPDATE promo_codes 
-            SET current_uses = current_uses + 1 
-            WHERE id = ?
-        ");
-        $stmt->execute([$promo_id]);
+        // Incrémenter current_uses du code promo si utilisé
+        if($promo_id) {
+            $stmt = $pdo->prepare("
+                UPDATE promo_codes
+                SET current_uses = current_uses + 1
+                WHERE id = ?
+            ");
+            $stmt->execute([$promo_id]);
+        }
     }
     
     // Vider le panier
@@ -88,8 +105,8 @@ try {
     unset($_SESSION['discount_amount']);
     
     $pdo->commit();
-    
-    $_SESSION['success'] = "Commande passée avec succès ! Numéro de commande : #" . $order_id;
+
+    $_SESSION['success'] = "Commande(s) passée(s) avec succès ! Numéros : #" . implode(', #', $order_ids);
     header('Location: orders.php');
     
 } catch(Exception $e) {

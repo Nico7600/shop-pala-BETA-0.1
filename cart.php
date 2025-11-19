@@ -37,7 +37,12 @@ try {
     $_SESSION['error'] = "Erreur lors du chargement du panier : " . $e->getMessage();
 }
 
-// Vérifier la réduction selon le type d'abonnement (après calcul du total)
+// Correction : chaque réduction est calculée sur le total de base
+$discount_amount = 0;
+if (isset($_SESSION['discount_amount'])) {
+    $discount_amount = floatval($_SESSION['discount_amount']);
+}
+
 $permission_discount = 0;
 $abofac_type = '';
 $abofac_label = '';
@@ -48,16 +53,26 @@ try {
     if ($perm_row) {
         $abofac_type = $perm_row['type'];
         if (in_array($abofac_type, ['Faction', 'Mini Faction', 'Grosse Faction'])) {
-            $permission_discount = round($total * 0.10, 2); // 10% de réduction
+            $permission_discount = round($total * 0.10, 2); // 10% sur le total de base
             $abofac_label = 'Réduction Faction (10%)';
         } elseif ($abofac_type === 'Individuel') {
-            $permission_discount = round($total * 0.05, 2); // 5% de réduction
+            $permission_discount = round($total * 0.05, 2); // 5% sur le total de base
             $abofac_label = 'Réduction Individuel (5%)';
         }
     }
 } catch(PDOException $e) {
     error_log("Erreur permissions : " . $e->getMessage());
 }
+
+// Calculer le total des réductions sur la valeur de base
+$total_discount = 0;
+if ($discount_amount > 0) {
+    $total_discount += $discount_amount;
+}
+if ($permission_discount > 0) {
+    $total_discount += $permission_discount;
+}
+$final_total = $total - $total_discount;
 
 try {
     // Récupérer le nom d'utilisateur
@@ -70,10 +85,6 @@ try {
 } catch(PDOException $e) {
     error_log("Erreur utilisateur : " . $e->getMessage());
 }
-
-// Calculer le total des réductions et l'utiliser pour discount_amount
-$total_discount = $discount_amount + $permission_discount;
-$final_total = $total - $total_discount;
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -177,45 +188,28 @@ $final_total = $total - $total_discount;
                     <div class="bg-gray-800 rounded-xl p-6 sticky top-4">
                         <h2 class="text-2xl font-bold mb-6">Récapitulatif</h2>
                         <div class="space-y-4 mb-6">
-                            <!-- Code Promo (déplacé ici, avant le sous-total) -->
-                            <div class="border-t border-gray-700 pt-4">
-                                <label class="block text-sm font-semibold mb-2">
-                                    <i class="fas fa-tag mr-2"></i>Code Promo
-                                </label>
-                                <div class="flex gap-2 mb-2">
-                                    <input type="text" 
-                                           id="promo_code_input" 
-                                           placeholder="Entrez votre code"
-                                           class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
-                                           <?php echo isset($_SESSION['promo_code']) ? 'value="'.$_SESSION['promo_code'].'" disabled' : ''; ?>>
-                                    <button type="button" 
-                                            id="apply_promo_btn"
-                                            onclick="applyPromoCode()"
-                                            class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-2 rounded-lg transition"
-                                            <?php echo isset($_SESSION['promo_code']) ? 'style="display:none"' : ''; ?>>
-                                        Appliquer
-                                    </button>
-                                    <button type="button" 
-                                            id="remove_promo_btn"
-                                            onclick="removePromoCode()"
-                                            class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2 rounded-lg transition"
-                                            <?php echo !isset($_SESSION['promo_code']) ? 'style="display:none"' : ''; ?>>
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                </div>
-                                <div id="promo_message" class="text-sm mt-2"></div>
-                            </div>
-
                             <div class="flex justify-between text-gray-400">
                                 <span>Sous-total</span>
                                 <span id="subtotal"><?php echo number_format($total, 2); ?>$</span>
                             </div>
-                            
-                            <!-- Réduction code promo (toujours avant total des réductions) -->
+
+                            <!-- Ajout du formulaire code promo -->
+                            <form id="couponForm" class="flex gap-2 mb-2">
+                                <input type="text" id="coupon_code" name="coupon_code" placeholder="Code promo" class="bg-gray-700 text-white px-3 py-2 rounded-lg flex-1" autocomplete="off">
+                                <button type="submit" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-4 py-2 rounded-lg">Appliquer</button>
+                            </form>
+                            <div id="coupon_message" class="text-sm mt-1"></div>
+
+                            <!-- Réduction code promo (remis avant total des réductions) -->
                             <?php if($discount_amount > 0): ?>
                             <div class="flex justify-between text-green-400" id="discount_row">
                                 <span><i class="fas fa-tag mr-1"></i>Réduction code promo</span>
                                 <span id="discount_amount">-<?php echo number_format($discount_amount, 2); ?>$</span>
+                            </div>
+                            <?php else: ?>
+                            <div class="flex justify-between text-green-400 hidden" id="discount_row">
+                                <span><i class="fas fa-tag mr-1"></i>Réduction code promo</span>
+                                <span id="discount_amount"></span>
                             </div>
                             <?php endif; ?>
 
@@ -237,7 +231,12 @@ $final_total = $total - $total_discount;
                             <?php if($total_discount > 0): ?>
                             <div class="flex justify-between text-yellow-400 font-bold border-t border-gray-700 pt-4">
                                 <span>Total des réductions</span>
-                                <span>-<?php echo number_format($total_discount, 2); ?>$</span>
+                                <span class="total_discount_span">-<?php echo number_format($total_discount, 2); ?>$</span>
+                            </div>
+                            <?php else: ?>
+                            <div class="flex justify-between text-yellow-400 font-bold border-t border-gray-700 pt-4" style="display:none;">
+                                <span>Total des réductions</span>
+                                <span class="total_discount_span"></span>
                             </div>
                             <?php endif; ?>
 
@@ -249,12 +248,16 @@ $final_total = $total - $total_discount;
                         <!-- Formulaire pour passer la commande -->
                         <form method="POST" action="process_order.php" onsubmit="return confirm('Confirmer la commande ?')">
                             <!-- Champs cachés pour les réductions -->
-                            <input type="hidden" name="discount_amount" value="<?php echo $total_discount; ?>">
+                            <input type="hidden" name="discount_amount" value="<?php echo $discount_amount; ?>">
                             <input type="hidden" name="permission_discount" value="<?php echo $permission_discount; ?>">
                             <input type="hidden" name="total_discount" value="<?php echo $total_discount; ?>">
                             <input type="hidden" name="final_total" value="<?php echo $final_total; ?>">
                             <?php foreach($cart_items as $item): ?>
+                                <input type="hidden" name="cart_id[]" value="<?php echo $item['cart_id']; ?>">
+                                <input type="hidden" name="item_ids[]" value="<?php echo $item['product']['id']; ?>">
                                 <input type="hidden" name="item_names[]" value="<?php echo htmlspecialchars($item['product']['name']); ?>">
+                                <input type="hidden" name="item_quantities[]" value="<?php echo $item['quantity']; ?>">
+                                <input type="hidden" name="item_prices[]" value="<?php echo $item['product']['price']; ?>">
                             <?php endforeach; ?>
                             <button type="submit" class="w-full bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white font-bold py-4 px-6 rounded-lg transition-all transform hover:scale-105 shadow-lg">
                                 <i class="fas fa-check-circle mr-2"></i>
@@ -268,101 +271,65 @@ $final_total = $total - $total_discount;
     </div>
 
     <?php include 'includes/footer.php'; ?>
-    
-    <script>
-    const abofacType = "<?php echo addslashes($abofac_type); ?>";
-    const abofacLabel = "<?php echo addslashes($abofac_label); ?>";
-
-    function getPermissionDiscount(cartTotal) {
-        if (["Faction", "Mini Faction", "Grosse Faction"].includes(abofacType)) {
-            return +(cartTotal * 0.10).toFixed(2);
-        } else if (abofacType === "Individuel") {
-            return +(cartTotal * 0.05).toFixed(2);
-        }
-        return 0;
-    }
-
-    function applyPromoCode() {
-        const promoCode = document.getElementById('promo_code_input').value.trim();
-        const cartTotal = <?php echo $total; ?>;
-        const messageDiv = document.getElementById('promo_message');
-        
-        if(!promoCode) {
-            messageDiv.innerHTML = '<span class="text-red-400"><i class="fas fa-exclamation-circle mr-1"></i>Veuillez entrer un code promo</span>';
-            return;
-        }
-        
-        messageDiv.innerHTML = '<span class="text-gray-400"><i class="fas fa-spinner fa-spin mr-1"></i>Validation en cours...</span>';
-        
-        fetch('validate_promo.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `promo_code=${encodeURIComponent(promoCode)}&cart_total=${cartTotal}`
-        })
-        .then(response => response.json())
-        .then(data => {
-            if(data.success) {
-                messageDiv.innerHTML = `<span class="text-green-400"><i class="fas fa-check-circle mr-1"></i>${data.message}</span>`;
-                
-                // Afficher la réduction
-                const discountRow = document.getElementById('discount_row');
-                if(discountRow) {
-                    document.getElementById('discount_amount').textContent = `-${data.discount_amount}€`;
-                } else {
-                    const newRow = document.createElement('div');
-                    newRow.id = 'discount_row';
-                    newRow.className = 'flex justify-between text-green-400';
-                    newRow.innerHTML = `<span><i class="fas fa-tag mr-1"></i>Réduction code promo</span><span id="discount_amount">-${data.discount_amount}€</span>`;
-                    document.getElementById('final_total').parentElement.parentElement.insertBefore(newRow, document.getElementById('final_total').parentElement);
-                }
-
-                // Recalculer la réduction faction/individuel dynamiquement
-                const permissionDiscount = getPermissionDiscount(cartTotal);
-
-                // Mettre à jour la réduction faction/individuel affichée
-                const permissionDiscountAmount = document.getElementById('permission_discount_amount');
-                if (permissionDiscountAmount) {
-                    permissionDiscountAmount.textContent = `-${permissionDiscount}€`;
-                }
-
-                // Mettre à jour le total en tenant compte de la réduction fidélité
-                const totalDiscount = parseFloat(data.discount_amount) + parseFloat(permissionDiscount);
-                const newTotal = (cartTotal - totalDiscount).toFixed(2);
-                document.getElementById('final_total').textContent = newTotal + '€';
-
-                // Mettre à jour les champs cachés du formulaire pour l'envoi correct au backend
-                document.querySelector('input[name="discount_amount"]').value = totalDiscount;
-                document.querySelector('input[name="permission_discount"]').value = permissionDiscount;
-                document.querySelector('input[name="total_discount"]').value = totalDiscount;
-                document.querySelector('input[name="final_total"]').value = newTotal;
-
-                // Désactiver l'input et changer les boutons
-                document.getElementById('promo_code_input').disabled = true;
-                document.getElementById('apply_promo_btn').style.display = 'none';
-                document.getElementById('remove_promo_btn').style.display = 'block';
-            } else {
-                messageDiv.innerHTML = `<span class="text-red-400"><i class="fas fa-exclamation-circle mr-1"></i>${data.message}</span>`;
-            }
-        })
-        .catch(error => {
-            messageDiv.innerHTML = '<span class="text-red-400"><i class="fas fa-exclamation-circle mr-1"></i>Erreur de connexion</span>';
-            console.error('Error:', error);
-        });
-    }
-    
-    function removePromoCode() {
-        fetch('remove_promo.php', {
-            method: 'POST'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if(data.success) {
-                location.reload();
-            }
-        });
-    }
-    </script>
 </body>
 </html>
+
+<!-- Ajout du script JS pour gérer le code promo -->
+<script>
+function updateTotalDiscount() {
+    // Utilise la valeur absolue pour le calcul
+    let discount = Math.abs(parseFloat(document.getElementById('discount_amount')?.textContent?.replace(/[^\d.-]/g, '') || 0));
+    let permissionDiscount = Math.abs(parseFloat(document.getElementById('permission_discount_amount')?.textContent?.replace(/[^\d.-]/g, '') || 0));
+    let totalDiscount = (isNaN(discount) ? 0 : discount) + (isNaN(permissionDiscount) ? 0 : permissionDiscount);
+    document.querySelectorAll('.total_discount_span').forEach(el => el.textContent = "-"+totalDiscount.toFixed(2)+"$");
+    // Affiche la ligne si elle était cachée
+    document.querySelectorAll('.total_discount_span').forEach(el => {
+        if (el.parentElement.style.display === "none") el.parentElement.style.display = "";
+    });
+    // Met à jour le total final
+    let subtotal = parseFloat(document.getElementById('subtotal').textContent.replace(/[^\d.-]/g, ''));
+    let finalTotal = subtotal - totalDiscount;
+    document.getElementById('final_total').textContent = finalTotal.toFixed(2)+"$";
+    // Met à jour les champs cachés du formulaire commande
+    document.querySelector('input[name="total_discount"]').value = totalDiscount;
+    document.querySelector('input[name="final_total"]').value = finalTotal;
+}
+
+document.getElementById('couponForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const code = document.getElementById('coupon_code').value.trim();
+    const msg = document.getElementById('coupon_message');
+    msg.textContent = '';
+    if (!code) {
+        msg.textContent = "Veuillez entrer un code promo.";
+        msg.className = "text-red-400";
+        return;
+    }
+    fetch('apply_coupon.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'coupon_code=' + encodeURIComponent(code)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('discount_row').classList.remove('hidden');
+            document.getElementById('discount_amount').textContent = "-"+parseFloat(data.discount_amount).toFixed(2)+"$";
+            document.querySelector('input[name="discount_amount"]').value = data.discount_amount;
+            msg.textContent = data.message || "Code promo appliqué !";
+            msg.className = "text-green-400";
+            updateTotalDiscount();
+        } else {
+            msg.textContent = data.message || "Code promo invalide.";
+            msg.className = "text-red-400";
+        }
+    })
+    .catch(() => {
+        msg.textContent = "Erreur lors de l'application du code.";
+        msg.className = "text-red-400";
+    });
+});
+
+// Met à jour le total des réductions au chargement (pour permission + code promo déjà présents)
+window.addEventListener('DOMContentLoaded', updateTotalDiscount);
+</script>

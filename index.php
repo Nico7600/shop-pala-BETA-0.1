@@ -462,10 +462,12 @@ $roles = [
                     elseif (strpos($role_info['color'], 'gray') !== false) $gradeTextColor = 'text-gray-400';
                 ?>
                     <div class="flex flex-col items-center gap-2">
-                        <img src="https://minotar.net/avatar/<?php echo htmlspecialchars($user['minecraft_username']); ?>/64"
-                             alt="Tête de <?php echo htmlspecialchars($user['username']); ?>"
-                             class="w-16 h-16 object-cover"
-                             style="image-rendering: pixelated;">
+                        <a href="profile.php?id=<?php echo $user['id']; ?>">
+                            <img src="https://minotar.net/avatar/<?php echo htmlspecialchars($user['minecraft_username']); ?>/64"
+                                 alt="Tête de <?php echo htmlspecialchars($user['username']); ?>"
+                                 class="w-16 h-16 object-cover hover:scale-110 transition-transform duration-200"
+                                 style="image-rendering: pixelated;">
+                        </a>
                         <span class="font-bold text-white text-lg flex items-center gap-2">
                             <?php echo htmlspecialchars($user['username']); ?>
                         </span>

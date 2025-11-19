@@ -28,8 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Catégorie non trouvée");
         }
         
-        // Définir une rareté par défaut
-        $rarity = 'common';
+        // Récupérer la rareté
+        $rarity = isset($_POST['rarity']) ? $_POST['rarity'] : null;
         
         // Insérer directement dans la table items UNIQUEMENT
         $stmt = $pdo->prepare("
@@ -168,7 +168,7 @@ try {
                         Nouveau Produit
                     </h2>
                     
-                    <form method="POST" class="space-y-4 sm:space-y-6 text-xs sm:text-base">
+                    <form method="POST" enctype="multipart/form-data" class="space-y-4 sm:space-y-6 text-xs sm:text-base">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-6">
                             <div>
                                 <label class="block text-sm font-medium mb-2">
@@ -250,6 +250,17 @@ try {
                                 <option value="">-- Sélectionner le serveur --</option>
                                 <option value="java">Java</option>
                                 <option value="bedrock">Bedrock</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs sm:text-sm font-bold mb-1 sm:mb-2">Rareté</label>
+                            <select name="rarity" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 focus:outline-none">
+                                <option value="">-- Sélectionner --</option>
+                                <option value="common">⚪ Commun</option>
+                                <option value="rare">🔵 Rare</option>
+                                <option value="epic">🟣 Épique</option>
+                                <option value="legendary">🟠 Légendaire</option>
                             </select>
                         </div>
 

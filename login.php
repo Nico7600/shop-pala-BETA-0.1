@@ -47,6 +47,32 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch(PDOException $e) {
                 // Ignorer l'erreur de log
             }
+
+            // Enregistre la connexion dans user_logins
+            try {
+                $stmt = $pdo->prepare("INSERT INTO user_logins (user_id, login_at) VALUES (?, NOW())");
+                $stmt->execute([$user['id']]);
+            } catch(PDOException $e) {
+                // Ignorer l'erreur de log
+            }
+
+            // Attribution des badges login_assign
+            try {
+                $stmt_badges = $pdo->prepare("SELECT id FROM badges WHERE login_assign = 1");
+                $stmt_badges->execute();
+                $login_badges = $stmt_badges->fetchAll(PDO::FETCH_COLUMN);
+                foreach ($login_badges as $badge_id) {
+                    // Vérifier si l'utilisateur a déjà ce badge
+                    $stmt_check = $pdo->prepare("SELECT 1 FROM user_badges WHERE user_id = ? AND badge_id = ?");
+                    $stmt_check->execute([$user['id'], $badge_id]);
+                    if (!$stmt_check->fetch()) {
+                        $stmt_insert = $pdo->prepare("INSERT INTO user_badges (user_id, badge_id, date_obtenue) VALUES (?, ?, NOW())");
+                        $stmt_insert->execute([$user['id'], $badge_id]);
+                    }
+                }
+            } catch(PDOException $e) {
+                // Ignorer l'erreur de badge
+            }
             
             header('Location: index.php');
             exit;
@@ -57,21 +83,49 @@ if($_SERVER['REQUEST_METHOD'] === 'POST') {
         $email = $_POST['reg_email'] ?? '';
         $password = $_POST['reg_password'] ?? '';
         $minecraft_username = $_POST['minecraft_username'] ?? '';
-        
+
         if(strlen($password) < 6) {
             $error = "Le mot de passe doit contenir au moins 6 caractères";
         } else {
             try {
-                $stmt = $pdo->prepare("INSERT INTO users (username, email, password, minecraft_username, role) VALUES (?, ?, ?, ?, 'client')");
-                $stmt->execute([$username, $email, password_hash($password, PASSWORD_DEFAULT), $minecraft_username]);
-                
-                // Créer une notification de bienvenue
-                $new_user_id = $pdo->lastInsertId();
-                notifyWelcome($pdo, $new_user_id, $username);
-                
-                $success = "Compte créé avec succès ! Vous pouvez vous connecter.";
+                // Vérifier si le nom d'utilisateur ou l'email existe déjà
+                $stmt_check = $pdo->prepare("SELECT 1 FROM users WHERE username = ? OR email = ?");
+                $stmt_check->execute([$username, $email]);
+                if ($stmt_check->fetch()) {
+                    $error = "Cet email ou nom d'utilisateur existe déjà";
+                } else {
+                    $stmt = $pdo->prepare("INSERT INTO users (username, email, password, minecraft_username, role) VALUES (?, ?, ?, ?, 'client')");
+                    $stmt->execute([$username, $email, password_hash($password, PASSWORD_DEFAULT), $minecraft_username]);
+
+                    // Enregistre la première connexion dans user_logins
+                    $new_user_id = $pdo->lastInsertId();
+                    try {
+                        $stmt = $pdo->prepare("INSERT INTO user_logins (user_id, login_at) VALUES (?, NOW())");
+                        $stmt->execute([$new_user_id]);
+                    } catch(PDOException $e) {
+                        // Ignorer l'erreur de log
+                    }
+
+                    // Créer une notification de bienvenue
+                    notifyWelcome($pdo, $new_user_id, $username);
+
+                    // Attribution des badges auto_assign
+                    try {
+                        $stmt_badges = $pdo->prepare("SELECT id FROM badges WHERE auto_assign = 1");
+                        $stmt_badges->execute();
+                        $auto_badges = $stmt_badges->fetchAll(PDO::FETCH_COLUMN);
+                        foreach ($auto_badges as $badge_id) {
+                            $stmt_insert = $pdo->prepare("INSERT INTO user_badges (user_id, badge_id, date_obtenue) VALUES (?, ?, NOW())");
+                            $stmt_insert->execute([$new_user_id, $badge_id]);
+                        }
+                    } catch(PDOException $e) {
+                        // Ignorer l'erreur de badge
+                    }
+
+                    $success = "Compte créé avec succès ! Vous pouvez vous connecter.";
+                }
             } catch(PDOException $e) {
-                $error = "Cet email ou nom d'utilisateur existe déjà";
+                $error = "Erreur lors de la création du compte";
             }
         }
     }

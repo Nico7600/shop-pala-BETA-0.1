@@ -37,11 +37,28 @@ function generatePromoCode() {
     return sprintf('Partenaire-%03d-%03d-%03d', rand(0,999), rand(0,999), rand(0,999));
 }
 
+// Récupération du dernier code promo généré par l'utilisateur (Partenaire-)
+$stmt_last_code = $pdo->prepare("SELECT created_at FROM promo_codes WHERE created_by = ? AND code LIKE 'Partenaire-%' ORDER BY created_at DESC LIMIT 1");
+$stmt_last_code->execute([$partner_id]);
+$last_code = $stmt_last_code->fetchColumn();
+
+$can_generate_code = true;
+$seconds_left_code = 0;
+if ($last_code) {
+    $last_code_time = strtotime($last_code);
+    $now = time();
+    $seconds_left_code = max(0, ($last_code_time + 48*3600) - $now);
+    if ($seconds_left_code > 0) {
+        $can_generate_code = false;
+    }
+}
+
 // Création du code promo
 if (
     $_SERVER['REQUEST_METHOD'] === 'POST'
     && isset($_POST['create_code'])
     && $target_username === $_SESSION['username'] // On ne peut ajouter que sur sa propre page
+    && $can_generate_code // Ajout de la restriction 48h
 ) {
     $code = generatePromoCode();
     $user_id = $partner_id;
@@ -245,11 +262,43 @@ if ($_SESSION['role'] === 'fondateur') {
                     <?php if ($target_username === $_SESSION['username']): ?>
                     <form method="post">
                         <button type="submit" name="create_code"
-                            class="flex items-center gap-2 px-6 py-2 rounded-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:ring-4 focus:ring-purple-400/50 shadow-lg transition-all duration-200 scale-100 hover:scale-105 active:scale-95 text-white">
+                            id="generateCodeBtn"
+                            class="flex items-center gap-2 px-6 py-2 rounded-xl font-bold 
+                            <?php echo $can_generate_code ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700' : 'bg-red-700 cursor-not-allowed'; ?> 
+                            focus:ring-4 focus:ring-purple-400/50 shadow-lg transition-all duration-200 scale-100 hover:scale-105 active:scale-95 text-white"
+                            <?php echo $can_generate_code ? '' : 'disabled'; ?>>
                             <i class="fa-solid fa-plus text-lg"></i>
-                            <span>Générer un code promo</span>
+                            <?php if ($can_generate_code): ?>
+                                <span>Générer un code promo</span>
+                            <?php else: ?>
+                                <span id="code-timer"></span>
+                            <?php endif; ?>
                         </button>
                     </form>
+                    <script>
+                    <?php if (!$can_generate_code): ?>
+                        // Timer JS pour le bouton Générer un code promo
+                        let secondsLeftCode = <?php echo $seconds_left_code; ?>;
+                        function updateCodeTimer() {
+                            if (secondsLeftCode <= 0) {
+                                document.getElementById('code-timer').textContent = "Générer un code promo";
+                                let btn = document.getElementById('generateCodeBtn');
+                                btn.classList.remove('bg-red-700', 'cursor-not-allowed');
+                                btn.classList.add('bg-gradient-to-r', 'from-blue-600', 'to-purple-600', 'hover:from-blue-700', 'hover:to-purple-700');
+                                btn.disabled = false;
+                                return;
+                            }
+                            let h = Math.floor(secondsLeftCode / 3600);
+                            let m = Math.floor((secondsLeftCode % 3600) / 60);
+                            let s = secondsLeftCode % 60;
+                            document.getElementById('code-timer').textContent =
+                                "Disponible dans " + (h > 0 ? h + "h " : "") + (m > 0 ? m + "m " : "") + s + "s";
+                            secondsLeftCode--;
+                            setTimeout(updateCodeTimer, 1000);
+                        }
+                        updateCodeTimer();
+                    <?php endif; ?>
+                    </script>
                     <!-- Bouton annonce avec timer -->
                     <?php
                         $disabled = $active_live_announce ? 'disabled' : '';
@@ -358,7 +407,9 @@ if ($_SESSION['role'] === 'fondateur') {
             </div>
         </div>
     </main>
-    <footer class="bg-gray-900 text-gray-200 py-4 text-center w-full left-0 z-50 mt-auto">
+    <!-- Correction du footer : positionnement sticky en bas -->
+    <footer class="bg-gray-900 text-gray-200 py-4 text-center w-full left-0 z-50 mt-auto"
+        style="position:sticky;bottom:0;">
         <?php include 'includes/footer.php'; ?>
     </footer>
 </body>

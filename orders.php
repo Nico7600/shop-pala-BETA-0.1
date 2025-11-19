@@ -34,12 +34,7 @@ function getStatusColor($status) {
 }
 
 try {
-    $stmt = $pdo->prepare("
-        SELECT *
-        FROM orders
-        WHERE user_id = ?
-        ORDER BY created_at DESC
-    ");
+    $stmt = $pdo->prepare("SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC");
     $stmt->execute([$_SESSION['user_id']]);
     $orders = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch(PDOException $e) {
@@ -144,30 +139,16 @@ try {
                                 </span>
                             </div>
                         </div>
-                        <?php if($total_reduction > 0): ?>
-                            <div class="flex justify-between items-center text-base font-bold mb-2 px-2 py-2 rounded bg-gray-900/60 border border-gray-700">
-                                <span class="flex items-center gap-2 text-green-400">
-                                    <i class="fas fa-tag"></i>
-                                    Réduction(s)
-                                </span>
-                                <span class="text-red-400 font-bold">-<?php echo number_format($total_reduction, 2); ?>$</span>
-                            </div>
-                            <?php if($permission_discount > 0): ?>
-                                <div class="text-base text-gray-400 mb-2 px-2">
-                                    Grade/Faction : <span class="text-red-400 font-bold">-<?php echo number_format($permission_discount, 2); ?>$</span>
-                                </div>
-                            <?php endif; ?>
-                        <?php endif; ?>
                         <div class="border-t border-gray-700 mt-4 mb-2"></div>
                         <div class="flex justify-between items-center text-2xl font-bold mt-2 px-2">
                             <span class="flex items-center gap-2 text-green-300 drop-shadow">
                                 <i class="fas fa-money-check-alt"></i>
-                                Total a payé
+                                Total payé
                             </span>
                             <span class="text-green-400 drop-shadow">
                                 <?php
-                                $total_paye = $order['total'] - $total_reduction;
-                                echo number_format($total_paye, 2) . "$";
+                                // Affiche simplement le total payé, sans soustraire à nouveau la réduction
+                                echo number_format($order['total'], 2) . "$";
                                 ?>
                             </span>
                         </div>

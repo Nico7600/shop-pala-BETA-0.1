@@ -1,8 +1,8 @@
 <?php
-define('DB_HOST', 'nicolavpaladium.mysql.db');
-define('DB_USER', 'nicolavpaladium');
+define('DB_HOST', 'nicolavpalashop.mysql.db');
+define('DB_USER', 'nicolavpalashop');
 define('DB_PASS', 'Panpan220405');
-define('DB_NAME', 'nicolavpaladium');
+define('DB_NAME', 'nicolavpalashop'); 
 
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
@@ -28,16 +28,5 @@ if(isset($_SESSION['user_id'])) {
     }
 }
 
-if(isset($_SESSION['user_id'])) {
-    try {
-        $stmt = $pdo->prepare("UPDATE users SET last_activity = NOW() WHERE id = ?");
-        $stmt->execute([$_SESSION['user_id']]);
-    } catch(PDOException $e) {
-        // Ignorer les erreurs pour ne pas bloquer l'application
-        error_log("Erreur mise à jour last_activity: " . $e->getMessage());
-    }
-}
-
-// Inclure la mise à jour de l'activité
 require_once __DIR__ . '/includes/update_activity.php';
 ?>

@@ -14,6 +14,24 @@ try {
     ");
     $stmt->execute();
     $orders = $stmt->fetchAll();
+
+    // Récupérer les quantités par commande depuis order_items
+    $orderIds = array_column($orders, 'id');
+    $quantities = [];
+    if (!empty($orderIds)) {
+        $in = implode(',', array_fill(0, count($orderIds), '?'));
+        $qstmt = $pdo->prepare("SELECT order_id, SUM(quantity) as total_quantity FROM order_items WHERE order_id IN ($in) GROUP BY order_id");
+        $qstmt->execute($orderIds);
+        foreach ($qstmt->fetchAll() as $row) {
+            $quantities[$row['order_id']] = $row['total_quantity'];
+        }
+    }
+    // Ajouter la quantité à chaque commande
+    foreach ($orders as &$order) {
+        $order['quantity'] = $quantities[$order['id']] ?? 1;
+    }
+    unset($order);
+
 } catch(PDOException $e) {
     $orders = [];
     $error = "Erreur lors de la récupération des commandes : " . $e->getMessage();
@@ -64,8 +82,14 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['unclaim_order'])) {
 // Traitement du changement de statut
 if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['order_id'], $_POST['status'])) {
     try {
-        $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ? AND seller_id = ?");
-        $stmt->execute([$_POST['status'], $_POST['order_id'], $_SESSION['user_id']]);
+        // Si le statut demandé est "cancelled", permettre à n'importe quel vendeur de l'annuler
+        if ($_POST['status'] === 'cancelled') {
+            $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ?");
+            $stmt->execute([$_POST['status'], $_POST['order_id']]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE orders SET status = ? WHERE id = ? AND seller_id = ?");
+            $stmt->execute([$_POST['status'], $_POST['order_id'], $_SESSION['user_id']]);
+        }
         
         // Notifier le client
         $stmt = $pdo->prepare("SELECT user_id FROM orders WHERE id = ?");
@@ -148,6 +172,24 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
         $_SESSION['error'] = "Erreur lors de la clôture : " . $e->getMessage();
     }
 }
+
+// Récupérer les abonnements actifs des clients depuis abofac
+$userIds = array_column($orders, 'user_id');
+$activeSubs = [];
+if (!empty($userIds)) {
+    $in = implode(',', array_fill(0, count($userIds), '?'));
+    $now = date('Y-m-d H:i:s');
+    $subStmt = $pdo->prepare("
+        SELECT user_id FROM abofac 
+        WHERE user_id IN ($in) 
+        AND (date_debut IS NULL OR date_debut <= ?) 
+        AND (date_fin IS NULL OR date_fin >= ?)
+    ");
+    $subStmt->execute(array_merge($userIds, [$now, $now]));
+    foreach ($subStmt->fetchAll() as $row) {
+        $activeSubs[$row['user_id']] = true;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="fr">
@@ -201,28 +243,6 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
                 </div>
                 <?php endif; ?>
 
-                <!-- Filtres -->
-                <div class="bg-gray-800 rounded-xl p-2 sm:p-4 mb-4 sm:mb-6 flex flex-col sm:flex-row gap-2 sm:gap-4">
-                    <button onclick="filterOrders('all')" class="filter-btn px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 transition-all">
-                        Toutes
-                    </button>
-                    <button onclick="filterOrders('pending')" class="filter-btn px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-all">
-                        En attente
-                    </button>
-                    <button onclick="filterOrders('processing')" class="filter-btn px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-all">
-                        En cours
-                    </button>
-                    <button onclick="filterOrders('completed')" class="filter-btn px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-all">
-                        Complétées
-                    </button>
-                    <button onclick="filterOrders('delivered')" class="filter-btn px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-all">
-                        Livrées
-                    </button>
-                    <button onclick="filterOrders('my')" class="filter-btn px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 transition-all">
-                        <i class="fas fa-user mr-1"></i> Mes commandes
-                    </button>
-                </div>
-
                 <!-- Liste des commandes -->
                 <div class="bg-gray-800 rounded-xl overflow-hidden">
                     <div class="overflow-x-auto">
@@ -235,6 +255,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">Article</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-left">Quantité</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-center">Montant</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-center">Abonnement</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-center hidden sm:table-cell">Vendeur</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-center">Statut</th>
                                     <th class="px-2 sm:px-4 py-2 sm:py-3 text-center hidden sm:table-cell">Date</th>
@@ -243,7 +264,10 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
                             </thead>
                             <tbody class="divide-y divide-gray-700">
                                 <?php foreach($orders as $order): ?>
-                                <tr class="hover:bg-gray-700/50 order-row" data-status="<?php echo $order['status']; ?>" data-seller="<?php echo $order['seller_id'] == $_SESSION['user_id'] ? 'my' : 'other'; ?>">
+                                <?php if($order['status'] === 'clos' || $order['status'] === 'cancelled') continue; ?>
+                                <tr class="hover:bg-gray-700/50 order-row" 
+                                    data-status="<?php echo $order['status']; ?>" 
+                                    data-seller="<?php echo $order['seller_id'] == $_SESSION['user_id'] ? 'my' : 'other'; ?>">
                                     <td class="px-2 sm:px-4 py-2 sm:py-3 font-mono text-xs sm:text-sm font-bold text-purple-400">#<?php echo $order['id']; ?></td>
                                     <td class="px-2 sm:px-4 py-2 sm:py-3"><?php echo htmlspecialchars($order['username']); ?></td>
                                     <td class="px-2 sm:px-4 py-2 sm:py-3">
@@ -258,17 +282,17 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
                                     </td>
                                     <td class="px-2 sm:px-4 py-2 sm:py-3">
                                         <span class="inline-block px-2 sm:px-3 py-1 rounded-full text-xs font-bold border bg-blue-500/20 text-blue-400 border-blue-500/30">
-                                            <!-- Si tu veux gérer la quantité, il faut ajouter une colonne 'quantity' dans la table orders -->
-                                            1
+                                            <?php echo htmlspecialchars($order['quantity']); ?>
                                         </span>
                                     </td>
                                     <td class="px-2 sm:px-4 py-2 sm:py-3 text-center font-bold text-green-400">
                                         <?php
-                                        $total = $order['total'] ?? 0;
-                                        $discount_amount = $order['discount_amount'] ?? 0;
-                                        $total_paid = $total - $discount_amount;
-                                        echo number_format($total_paid, 2) . "€";
+                                        // Affiche le total payé, sans soustraire la réduction
+                                        echo number_format($order['total'] ?? 0, 2) . "$";
                                         ?>
+                                    </td>
+                                    <td class="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                                        <?php echo isset($activeSubs[$order['user_id']]) ? '<span class="text-green-400 font-bold">Oui</span>' : '<span class="text-red-400">Non</span>'; ?>
                                     </td>
                                     <td class="px-2 sm:px-4 py-2 sm:py-3 text-center hidden sm:table-cell">
                                         <?php if($order['seller_id']): ?>
@@ -435,8 +459,24 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
 
     <script>
     function filterOrders(status) {
+        // Ajout du feedback visuel on the active button
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        // Sélectionne le bouton cliqué via l'événement
+        let btns = document.querySelectorAll('.filter-btn');
+        btns.forEach(btn => {
+            if (
+                (status === 'all' && btn.textContent.trim().startsWith('Toutes')) ||
+                (status === 'pending' && btn.textContent.trim().startsWith('En attente')) ||
+                (status === 'processing' && btn.textContent.trim().startsWith('En cours')) ||
+                (status === 'completed' && btn.textContent.trim().startsWith('Complétées')) ||
+                (status === 'delivered' && btn.textContent.trim().startsWith('Livrées')) ||
+                (status === 'my' && btn.textContent.trim().includes('Mes commandes'))
+            ) {
+                btn.classList.add('active');
+            }
+        });
+
         const rows = document.querySelectorAll('.order-row');
-        
         rows.forEach(row => {
             if(status === 'all') {
                 row.style.display = '';
@@ -449,7 +489,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
             }
         });
     }
-    
+
     function openNotificationModal(orderId, username) {
         document.getElementById('modalOrderId').value = orderId;
         document.getElementById('modalUsername').textContent = username;
@@ -467,6 +507,11 @@ if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['validate_order'])) {
         if(e.target === this) {
             closeNotificationModal();
         }
+    });
+
+    // Initialiser le filtre sur "Toutes" au chargement
+    document.addEventListener('DOMContentLoaded', function() {
+        filterOrders('all');
     });
     </script>
 </body>
